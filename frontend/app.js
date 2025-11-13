@@ -1,3 +1,4 @@
+const BACKEND_URL = "https://sovereign-backend-rhel.onrender.com";
 let token = localStorage.getItem('token') || '';
 
 function setView(html){ document.getElementById('view').innerHTML = html; }
@@ -220,3 +221,9 @@ document.getElementById('nav-vision').onclick = visionView;
 document.getElementById('nav-gov').onclick = govView;
 
 authView();
+
+fetch(`${BACKEND_URL}/api/health`)
+  .then(r => r.json())
+  .then(d => console.log("Backend Connected:", d))
+  .catch(e => console.error("Connection failed:", e));
+

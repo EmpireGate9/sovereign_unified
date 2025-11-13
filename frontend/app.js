@@ -1,3 +1,5 @@
+async function sendRegister(email, name, password){ const body={email:email,password:password,full_name:name}; const res=await fetch(BACKEND_URL+REGISTER_PATH,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); return res;}
+const REGISTER_PATH = "/api/auth/register";
 const BACKEND_URL = "https://sovereign-backend-rhel.onrender.com";
 let token = localStorage.getItem('token') || '';
 

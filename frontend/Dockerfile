@@ -1,11 +1,7 @@
-# استخدم Nginx لتقديم ملفات الواجهة
 FROM nginx:stable-alpine
-
-# انسخ ملفات الواجهة إلى مجلد التقديم الافتراضي
-COPY . /usr/share/nginx/html
-
-# فتح المنفذ 80
+# انسخ الملفات الثلاثة مباشرة إلى جذر html
+COPY frontend/index.html /usr/share/nginx/html/index.html
+COPY frontend/styles.css  /usr/share/nginx/html/styles.css
+COPY frontend/app.js      /usr/share/nginx/html/app.js
 EXPOSE 80
-
-# تشغيل Nginx
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["nginx","-g","daemon off;"]

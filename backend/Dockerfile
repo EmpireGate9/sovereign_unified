@@ -6,4 +6,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 EXPOSE 8000
 # why: run migrations first to avoid startup race
-CMD /bin/sh -lc "cd backend && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+CMD /bin/sh -lc "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"

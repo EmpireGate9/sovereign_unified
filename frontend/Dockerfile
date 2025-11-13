@@ -1,11 +1,11 @@
-# استخدم صورة Node للبناء
-FROM node:18-alpine AS build
-WORKDIR /app
-COPY . .
-RUN npm install && npm run build
-
-# استخدم Nginx للتقديم
+# استخدم Nginx لتقديم ملفات الواجهة
 FROM nginx:stable-alpine
-COPY --from=build /app/dist /usr/share/nginx/html
+
+# انسخ ملفات الواجهة إلى مجلد التقديم الافتراضي
+COPY . /usr/share/nginx/html
+
+# فتح المنفذ 80
 EXPOSE 80
+
+# تشغيل Nginx
 CMD ["nginx", "-g", "daemon off;"]

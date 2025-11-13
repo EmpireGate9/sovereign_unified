@@ -28,7 +28,7 @@ function authView(){
 }
 
 async function register(){
-  const res = await fetch('http://localhost:8080/api/auth/register',{
+  const res = await fetch('http://localhost:8080/api/api/auth/register',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({email: r_email.value, password: r_pass.value, full_name: r_name.value})
   });
@@ -283,7 +283,7 @@ fetch(`${BACKEND_URL}/health`)
       try {
         const payload = { email: regEmail.value, name: regName.value, password: regPass.value };
         // جرّب مسارات شائعة للتسجيل
-        const endpoints = ['/register', '/api/auth/register', '/api/auth/register'];
+        const endpoints = ['/register', '/api/api/auth/register', '/api/api/auth/register'];
         let resp;
         for (const ep of endpoints) {
           try { resp = await call(ep, payload); break; } catch {}

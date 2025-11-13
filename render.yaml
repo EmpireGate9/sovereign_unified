@@ -1,23 +1,11 @@
-# render.yaml
-# تكوين تلقائي لخدمة متكاملة (backend + frontend + db + redis)
-# يعمل مع مشروع sovereign_unified
-
 services:
   - type: web
     name: sovereign-backend
     env: docker
     plan: free
-    region: frankfurt  # يمكنك تغيير المنطقة (oregon, singapore, frankfurt...)
+    region: frankfurt
     dockerfilePath: ./backend/Dockerfile
     envVars:
-      - key: DATABASE_URL
-        fromService:
-          name: sovereign-db
-          type: postgresql
-      - key: REDIS_URL
-        fromService:
-          name: sovereign-redis
-          type: redis
       - key: APP_ENV
         value: production
       - key: SECRET_KEY
@@ -29,6 +17,7 @@ services:
     name: sovereign-frontend
     env: docker
     plan: free
+    region: frankfurt
     dockerfilePath: ./frontend/Dockerfile
     envVars:
       - key: APP_ENV

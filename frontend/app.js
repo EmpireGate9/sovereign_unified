@@ -1,5 +1,5 @@
 async function sendRegister(email, name, password){ const body={email:email,password:password,full_name:name}; const res=await fetch(BACKEND_URL+REGISTER_PATH,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); return res;}
-const REGISTER_PATH = "/api/auth/register";
+const REGISTER_PATH = "/auth/register";
 const BACKEND_URL = "https://sovereign-backend-rhel.onrender.com";
 let token = localStorage.getItem('token') || '';
 
@@ -28,7 +28,7 @@ function authView(){
 }
 
 async function register(){
-  const res = await fetch('http://localhost:8080/api/auth/register',{
+  const res = await fetch('http://localhost:8080/auth/register',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({email: r_email.value, password: r_pass.value, full_name: r_name.value})
   });
@@ -36,7 +36,7 @@ async function register(){
 }
 
 async function login(){
-  const res = await fetch('http://localhost:8080/api/auth/login',{
+  const res = await fetch('http://localhost:8080/auth/login',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({email: l_email.value, password: l_pass.value})
   });
@@ -61,7 +61,7 @@ function projectsView(){
 }
 
 async function createProject(){
-  const res = await fetch('http://localhost:8080/api/projects',{
+  const res = await fetch('http://localhost:8080/projects',{
     method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
     body: JSON.stringify({name: p_name.value, description: p_desc.value})
   });
@@ -69,7 +69,7 @@ async function createProject(){
 }
 
 async function listProjects(){
-  const res = await fetch('http://localhost:8080/api/projects', {headers:{'Authorization':'Bearer '+token}});
+  const res = await fetch('http://localhost:8080/projects', {headers:{'Authorization':'Bearer '+token}});
   const data = await res.json();
   projects_list.innerHTML = '<ul>'+data.map(p=>`<li>${p.id} — ${p.name}</li>`).join('')+'</ul>';
 }
@@ -91,7 +91,7 @@ async function uploadFile(){
   const fd = new FormData();
   fd.append('project_id', f_pid.value);
   fd.append('f', file_input.files[0]);
-  const res = await fetch('http://localhost:8080/api/files/upload',{method:'POST', headers:{'Authorization':'Bearer '+token}, body:fd});
+  const res = await fetch('http://localhost:8080/files/upload',{method:'POST', headers:{'Authorization':'Bearer '+token}, body:fd});
   file_resp.textContent = await res.text();
 }
 
@@ -109,11 +109,11 @@ function chatView(){
 }
 
 async function sendMsg(){
-  const res = await fetch('http://localhost:8080/api/chat/send',{method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({project_id: c_pid.value, content: c_text.value})});
+  const res = await fetch('http://localhost:8080/chat/send',{method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({project_id: c_pid.value, content: c_text.value})});
   alert(res.ok ? 'تم الإرسال' : 'فشل');
 }
 async function loadHistory(){
-  const res = await fetch('http://localhost:8080/api/chat/history?project_id='+encodeURIComponent(c_pid.value), {headers:{'Authorization':'Bearer '+token}});
+  const res = await fetch('http://localhost:8080/chat/history?project_id='+encodeURIComponent(c_pid.value), {headers:{'Authorization':'Bearer '+token}});
   chat_box.textContent = await res.text();
 }
 
@@ -151,7 +151,7 @@ async function uploadAudio(){
   const fd = new FormData();
   fd.append('project_id', v_pid.value);
   fd.append('audio', blob, 'voice.webm');
-  const res = await fetch('http://localhost:8080/api/voice/upload', {method:'POST', headers:{'Authorization':'Bearer '+token}, body: fd});
+  const res = await fetch('http://localhost:8080/voice/upload', {method:'POST', headers:{'Authorization':'Bearer '+token}, body: fd});
   voice_resp.textContent = await res.text();
   _chunks = [];
 }
@@ -189,7 +189,7 @@ async function snap(){
   const fd = new FormData();
   fd.append('project_id', i_pid.value);
   fd.append('image', blob, 'snap.png');
-  const res = await fetch('http://localhost:8080/api/vision/upload', {method:'POST', headers:{'Authorization':'Bearer '+token}, body: fd});
+  const res = await fetch('http://localhost:8080/vision/upload', {method:'POST', headers:{'Authorization':'Bearer '+token}, body: fd});
   img_resp.textContent = await res.text();
 }
 
@@ -206,11 +206,11 @@ function govView(){
 }
 
 async function createPolicy(){
-  const res = await fetch('http://localhost:8080/api/governance/policies', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({name: pol_name.value, rules: JSON.parse(pol_rules.value||"{}")})});
+  const res = await fetch('http://localhost:8080/governance/policies', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({name: pol_name.value, rules: JSON.parse(pol_rules.value||"{}")})});
   pol_out.textContent = await res.text();
 }
 async function listPolicies(){
-  const res = await fetch('http://localhost:8080/api/governance/policies', {headers:{'Authorization':'Bearer '+token}});
+  const res = await fetch('http://localhost:8080/governance/policies', {headers:{'Authorization':'Bearer '+token}});
   pol_out.textContent = await res.text();
 }
 
@@ -224,7 +224,7 @@ document.getElementById('nav-gov').onclick = govView;
 
 authView();
 
-fetch(`${BACKEND_URL}/api/health`)
+fetch(`${BACKEND_URL}/health`)
   .then(r => r.json())
   .then(d => console.log("Backend Connected:", d))
   .catch(e => console.error("Connection failed:", e));
@@ -283,7 +283,7 @@ fetch(`${BACKEND_URL}/api/health`)
       try {
         const payload = { email: regEmail.value, name: regName.value, password: regPass.value };
         // جرّب مسارات شائعة للتسجيل
-        const endpoints = ['/api/register', '/api/auth/register', '/auth/register'];
+        const endpoints = ['/register', '/auth/register', '/auth/register'];
         let resp;
         for (const ep of endpoints) {
           try { resp = await call(ep, payload); break; } catch {}
@@ -305,7 +305,7 @@ fetch(`${BACKEND_URL}/api/health`)
       e.preventDefault();
       try {
         const payload = { email: loginEmail.value, password: loginPass.value };
-        const endpoints = ['/api/login', '/api/auth/login', '/auth/login', '/token'];
+        const endpoints = ['/login', '/auth/login', '/auth/login', '/token'];
         let resp;
         for (const ep of endpoints) {
           try { resp = await call(ep, payload); break; } catch {}
@@ -321,7 +321,7 @@ fetch(`${BACKEND_URL}/api/health`)
   }
 
   // فحص سريع للباكند
-  fetch(`${BACKEND_URL}/api/health`)
+  fetch(`${BACKEND_URL}/health`)
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(d => console.log('Backend OK:', d))
     .catch(() => console.log('Health check not found, continuing...'));

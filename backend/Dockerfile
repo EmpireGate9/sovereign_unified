@@ -6,4 +6,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 EXPOSE 8000
 # why: run migrations first to avoid startup race
-CMD bash -lc "if [ -f alembic.ini ]; then alembic upgrade head || true; fi;       uvicorn app.main:app --host 0.0.0.0 --port 8000"
+CMD ["uvicorn","entrypoint:app","--host","0.0.0.0","--port","$PORT"]

@@ -1,5 +1,5 @@
 async function sendRegister(email, name, password){ const body={email:email,password:password,full_name:name}; const res=await fetch(BACKEND_URL+REGISTER_PATH,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); return res;}
-const REGISTER_PATH = "/auth/register";
+const REGISTER_PATH = "/api/auth/register";
 const BACKEND_URL = "https://sovereign-backend-rhel.onrender.com";
 let token = localStorage.getItem('token') || '';
 
@@ -28,7 +28,7 @@ function authView(){
 }
 
 async function register(){
-  const res = await fetch('http://localhost:8080/auth/register',{
+  const res = await fetch('http://localhost:8080/api/auth/register',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({email: r_email.value, password: r_pass.value, full_name: r_name.value})
   });
@@ -283,7 +283,7 @@ fetch(`${BACKEND_URL}/health`)
       try {
         const payload = { email: regEmail.value, name: regName.value, password: regPass.value };
         // جرّب مسارات شائعة للتسجيل
-        const endpoints = ['/register', '/auth/register', '/auth/register'];
+        const endpoints = ['/register', '/api/auth/register', '/api/auth/register'];
         let resp;
         for (const ep of endpoints) {
           try { resp = await call(ep, payload); break; } catch {}

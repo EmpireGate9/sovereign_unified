@@ -1,0 +1,53 @@
+version: "3.9"
+services:
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    ports: ["80:80"]
+    depends_on: [backend, frontend]
+    volumes:
+      - ./ops/nginx.conf:/etc/nginx/nginx.conf:ro
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sovereign}
+      POSTGRES_USER: ${POSTGRES_USER:-sovereign}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sovereign}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: [ ./.env ]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://sovereign:sovereign@db:5432/sovereign}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports: ["8000:8000"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+volumes:
+  db_data:

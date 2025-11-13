@@ -1,0 +1,12 @@
+body{font-family:system-ui,Segoe UI,Arial; background:#0b0b0b;color:#eaeaea;margin:0}
+header{background:#121212;border-bottom:1px solid #222;padding:12px 16px;position:sticky;top:0}
+h1{margin:0 0 8px 0;font-size:20px}
+nav button{margin:4px;border:1px solid #333;background:#1b1b1b;color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer}
+nav button:hover{background:#222}
+section{padding:16px}
+input,textarea,select{background:#0e0e0e;color:#fff;border:1px solid #333;border-radius:8px;padding:8px;width:100%;box-sizing:border-box}
+.card{background:#121212;border:1px solid #222;border-radius:16px;padding:16px;margin:12px 0}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.col{flex:1 1 280px}
+.actions button{padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1b1b1b;color:#fff}
+.small{font-size:12px;color:#aaa}

@@ -22,6 +22,8 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+    - key: BACKEND_URL
+      value: https://sovereign-backend-rhel.onrender.com
     autoDeploy: true
 
   - type: redis

@@ -29,7 +29,7 @@ databases:
     plan: free
     region: frankfurt
 
-redis:
-  - name: sovereign-redis
+  - type: redis
+    name: sovereign-redis
     plan: free
     region: frankfurt

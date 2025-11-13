@@ -6,4 +6,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 EXPOSE 8000
 # why: run migrations first to avoid startup race
-CMD ["uvicorn","entrypoint:app","--host","0.0.0.0","--port","$PORT"]
+CMD /bin/sh -c "uvicorn entrypoint:app --host 0.0.0.0 --port $PORT"

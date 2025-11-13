@@ -227,3 +227,100 @@ fetch(`${BACKEND_URL}/api/health`)
   .then(d => console.log("Backend Connected:", d))
   .catch(e => console.error("Connection failed:", e));
 
+
+// === Injected by deploy script ===
+(() => {
+  const BACKEND_URL = "https://sovereign-backend-rhel.onrender.com";
+
+  // محاولة وسم الحقول والأزرار تلقائياً حسب ترتيبها الظاهر في الصفحة
+  const inputs = Array.from(document.querySelectorAll('input'));
+  // نتوقع أول 3 للتسجيل، وبعدها 2 للدخول (حسب الواجهة الحالية)
+  const [regEmail, regName, regPass, loginEmail, loginPass] = inputs;
+
+  // وسم أزرار "تسجيل" و"دخول" بالاعتماد على نص الزر
+  const buttons = Array.from(document.querySelectorAll('button'));
+  const regBtn   = buttons.find(b => /تسجيل/.test(b.textContent || b.innerText));
+  const loginBtn = buttons.find(b => /دخول/.test(b.textContent || b.innerText));
+
+  // مكان عرض التوكن إن وجد، أو إنشاؤه
+  let tokenBox = document.querySelector('#tokenDisplay');
+  if (!tokenBox) {
+    tokenBox = document.createElement('div');
+    tokenBox.id = 'tokenDisplay';
+    tokenBox.style.cssText = 'margin-top:16px;font-size:14px;direction:rtl;color:#9ae6b4';
+    const container = document.body || document.documentElement;
+    container.appendChild(tokenBox);
+  }
+  const setToken = (t) => {
+    if (t) localStorage.setItem('token', t);
+    const v = localStorage.getItem('token') || '—';
+    tokenBox.textContent = `التوكن: ${v}`;
+  };
+  setToken(); // عرض المخزّن إن وُجد
+
+  const call = async (path, data, withAuth=false) => {
+    const url = `${BACKEND_URL}${path}`;
+    const headers = {'Content-Type': 'application/json'};
+    if (withAuth) {
+      const t = localStorage.getItem('token');
+      if (t) headers['Authorization'] = `Bearer ${t}`;
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data||{})
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+  };
+
+  // ربط التسجيل
+  if (regBtn && regEmail && regName && regPass) {
+    regBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        const payload = { email: regEmail.value, name: regName.value, password: regPass.value };
+        // جرّب مسارات شائعة للتسجيل
+        const endpoints = ['/api/register', '/api/auth/register', '/auth/register'];
+        let resp;
+        for (const ep of endpoints) {
+          try { resp = await call(ep, payload); break; } catch {}
+        }
+        if (!resp) throw new Error('No register endpoint worked');
+        // لو رجّع توكن
+        const token = resp.token || resp.access_token || resp.jwt;
+        if (token) setToken(token);
+        alert('تم التسجيل بنجاح');
+      } catch (err) {
+        console.error(err); alert('فشل التسجيل');
+      }
+    });
+  }
+
+  // ربط الدخول
+  if (loginBtn && loginEmail && loginPass) {
+    loginBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        const payload = { email: loginEmail.value, password: loginPass.value };
+        const endpoints = ['/api/login', '/api/auth/login', '/auth/login', '/token'];
+        let resp;
+        for (const ep of endpoints) {
+          try { resp = await call(ep, payload); break; } catch {}
+        }
+        if (!resp) throw new Error('No login endpoint worked');
+        const token = resp.token || resp.access_token || resp.jwt;
+        if (token) setToken(token);
+        alert('تم تسجيل الدخول');
+      } catch (err) {
+        console.error(err); alert('فشل تسجيل الدخول');
+      }
+    });
+  }
+
+  // فحص سريع للباكند
+  fetch(`${BACKEND_URL}/api/health`)
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(d => console.log('Backend OK:', d))
+    .catch(() => console.log('Health check not found, continuing...'));
+})();

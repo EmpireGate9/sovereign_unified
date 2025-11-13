@@ -1,4 +1,6 @@
-services:
+git add render.yaml
+git commit -m "fix: move redis under services"
+git pushservices:
   - type: web
     name: sovereign-backend
     env: docker
@@ -31,5 +33,48 @@ databases:
 
   - type: redis
     name: sovereign-redis
+    plan: free
+    region: frankfurt
+services:
+  - type: web
+    name: sovereign-backend
+    env: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./backend/Dockerfile
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      # اربط لاحقًا إن أردت:
+      # - key: DATABASE_URL
+      #   fromDatabase:
+      #     name: sovereign-db
+      # - key: REDIS_URL
+      #   fromService:
+      #     name: sovereign-redis
+      #     type: redis
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+  - type: web
+    name: sovereign-frontend
+    env: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./frontend/Dockerfile
+    envVars:
+      - key: APP_ENV
+        value: production
+    autoDeploy: true
+
+  - type: redis
+    name: sovereign-redis
+    plan: free
+    region: frankfurt
+
+databases:
+  - name: sovereign-db
     plan: free
     region: frankfurt

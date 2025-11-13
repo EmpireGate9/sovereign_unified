@@ -28,6 +28,7 @@ services:
     name: sovereign-redis
     plan: free
     region: frankfurt
+    ipAllowList: []   # السماح بالاتصال من جميع الخدمات
 
 databases:
   - name: sovereign-db

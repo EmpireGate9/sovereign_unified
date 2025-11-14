@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: sovereign-backend
+    env: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./backend/Dockerfile
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+  - type: web
+    name: sovereign-frontend
+    env: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./frontend/Dockerfile
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: BACKEND_URL
+        value: https://sovereign-backend-rhel.onrender.com
+    autoDeploy: true

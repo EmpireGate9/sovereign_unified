@@ -1,7 +1,7 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncAsyncSession
 from .. import models
 
-def create_task(db: Session, project_id: int, title: str):
+def create_task(db: AsyncSession, project_id: int, title: str):
     t = models.Task(project_id=project_id, title=title)
     db.add(t)
     db.commit()

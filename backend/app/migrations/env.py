@@ -1,8 +1,12 @@
-import sys, os; sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import sys, os
 from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import context
+
+# أضف مسار المشروع للجذر حتى يمكنه استيراد app
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+
 from app.database import Base
 from app.config import settings
 

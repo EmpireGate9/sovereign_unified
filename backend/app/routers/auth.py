@@ -10,12 +10,40 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=schemas.UserOut)
 async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
-    if await users_crud.get_user_by_email(db, user.email):
+    """
+    User registration endpoint.
+
+    - checks if email already exists
+    - hashes the password
+    - creates and returns the new user
+    """
+    from sqlalchemy import select
+    from app import models
+    from app.utils.security import get_password_hash
+
+    # check if user exists
+    result = await db.execute(
+        select(models.User).where(models.User.email == user.email)
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
-    created = await users_crud.create_user(db, email=user.email, password=user.password, full_name=user.full_name or "")
-    return created
+
+    # create user
+    hashed_password = get_password_hash(user.password)
+    new_user = models.User(
+        email=user.email,
+        hashed_password=hashed_password,
+        full_name=user.full_name or "",
+    )
+
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    return new_user
 
 @router.post("/login", response_model=schemas.Token)
+, response_model=schemas.Token)
 async def login(form: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
     user = await users_crud.get_user_by_email(db, form.email)
     if not user or not verify_password(form.password, user.hashed_password):

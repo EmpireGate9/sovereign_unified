@@ -4,7 +4,7 @@ services:
     env: docker
     plan: free
     region: frankfurt
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: "./backend/Dockerfile"
     envVars:
       - key: APP_ENV
         value: production
@@ -18,10 +18,10 @@ services:
     env: docker
     plan: free
     region: frankfurt
-    dockerfilePath: ./frontend/Dockerfile
+    dockerfilePath: "./frontend/Dockerfile"
     envVars:
       - key: APP_ENV
         value: production
       - key: BACKEND_URL
-        value: https://sovereign-backend-rhel.onrender.com
+        value: "https://sovereign-backend-rhel.onrender.com"
     autoDeploy: true

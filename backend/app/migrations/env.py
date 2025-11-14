@@ -1,3 +1,4 @@
+import sys, os; sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine

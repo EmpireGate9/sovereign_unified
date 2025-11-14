@@ -1,5 +1,4 @@
 from app.database import async_engine
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import asyncio
 
@@ -15,6 +14,6 @@ async def create_tables():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """))
-        print("Tables created successfully.")
+        print("Users table created.")
 
 asyncio.run(create_tables())

@@ -22,17 +22,6 @@ services:
     envVars:
       - key: APP_ENV
         value: production
-    - key: BACKEND_URL
-      value: https://sovereign-backend-rhel.onrender.com
+      - key: BACKEND_URL
+        value: https://sovereign-backend-rhel.onrender.com
     autoDeploy: true
-
-  - type: redis
-    name: sovereign-redis
-    plan: free
-    region: frankfurt
-    ipAllowList: []   # السماح بالاتصال من جميع الخدمات
-
-databases:
-  - name: sovereign-db
-    plan: free
-    region: frankfurt

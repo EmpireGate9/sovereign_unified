@@ -13,7 +13,7 @@ async def init_models():
 async def on_startup():
     await init_models()
 # --- create DB tables on startup (idempotent) ---
-from app.database import Base, async_engine
+from app.database import Base, engine as async_engine
 
 @app.on_event("startup")
 async def _create_tables_on_startup():

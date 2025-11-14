@@ -6,6 +6,8 @@ services:
     region: frankfurt
     dockerfilePath: "./backend/Dockerfile"
     envVars:
+      - key: DATABASE_URL
+        value: "postgresql://sovereign_db_bp5b_user:wxCyBHvJ1gVhX7ayotQ9DhYuUHqB1qK1@dpg-d4b04t1r0fns73ejuq1g-a/sovereign_db_bp5b"
       - key: APP_ENV
         value: production
       - key: SECRET_KEY
@@ -20,6 +22,8 @@ services:
     region: frankfurt
     dockerfilePath: "./frontend/Dockerfile"
     envVars:
+      - key: DATABASE_URL
+        value: "postgresql://sovereign_db_bp5b_user:wxCyBHvJ1gVhX7ayotQ9DhYuUHqB1qK1@dpg-d4b04t1r0fns73ejuq1g-a/sovereign_db_bp5b"
       - key: APP_ENV
         value: production
       - key: BACKEND_URL

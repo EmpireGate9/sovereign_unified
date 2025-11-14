@@ -41,6 +41,7 @@ async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db))
 @router.post("/login", response_model=schemas.Token)
 , response_model=schemas.Token)
 , response_model=schemas.Token)
+, response_model=schemas.Token)
 async def login(form: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
     user = await users_crud.get_user_by_email(db, form.email)
     if not user or not verify_password(form.password, user.hashed_password):

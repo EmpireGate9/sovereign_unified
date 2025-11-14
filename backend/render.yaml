@@ -10,11 +10,8 @@ services:
         value: production
       - key: SECRET_KEY
         generateValue: true
-      - key: DATABASE_URL
-        sync: false
     healthCheckPath: /api/health
     autoDeploy: true
-
   - type: web
     name: sovereign-frontend
     env: docker

@@ -23,6 +23,7 @@ app.add_middleware(
 api_router = APIRouter()
 
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
+api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_router.include_router(files_router, prefix="/files", tags=["files"])
 api_router.include_router(vision_router, prefix="/vision", tags=["vision"])
 api_router.include_router(voice_router, prefix="/voice", tags=["voice"])

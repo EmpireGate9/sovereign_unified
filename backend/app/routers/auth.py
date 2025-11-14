@@ -6,7 +6,7 @@ from ..crud import users as users_crud
 from ..utils.security import verify_password, create_access_token
 from ..config import settings
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):

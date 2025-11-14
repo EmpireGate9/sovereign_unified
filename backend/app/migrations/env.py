@@ -1,3 +1,11 @@
+import os, sys
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+if BASE_DIR not in sys.path:
+
+    sys.path.insert(0, BASE_DIR)
+
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
@@ -5,7 +13,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.config import settings
-from ..database import Base
+from app.database import Base
 from .. import models
 
 config = context.config

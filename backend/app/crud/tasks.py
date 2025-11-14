@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncAsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models
 
 def create_task(db: AsyncSession, project_id: int, title: str):

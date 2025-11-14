@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncAsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models
 
 def add_message(db: AsyncSession, project_id: int, role: str, content: str, user_id: int|None=None):

@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncAsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models
 
 def create_policy(db: AsyncSession, name: str, rules: dict):

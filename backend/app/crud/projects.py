@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncAsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models
 
 def create_project(db: AsyncSession, owner_id: int, name: str, description: str=""):

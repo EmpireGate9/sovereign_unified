@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncAsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 from .. import models
 
 def create_file(db: AsyncSession, project_id: int, filename: str, mime: str, size: int, storage_path: str):

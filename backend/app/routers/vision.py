@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File
-from sqlalchemy.ext.asyncio import AsyncAsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..deps import get_current_user
 from ..integrations.storage import save_file

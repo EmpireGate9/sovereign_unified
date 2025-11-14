@@ -1,5 +1,5 @@
 import os
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncAsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 
 # خذ متغير البيئة واستبدل السائق إلى asyncpg إن كان عاديًا
@@ -17,7 +17,7 @@ engine = create_async_engine(
 async_session_maker = async_sessionmaker(
     bind=engine,
     expire_on_commit=False,
-    class_=AsyncAsyncSession,
+    class_=AsyncSession,
 )
 
 Base = declarative_base()

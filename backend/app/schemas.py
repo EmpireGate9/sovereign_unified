@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
@@ -26,3 +27,17 @@ class Login(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class MessageCreate(BaseModel):
+    role: str
+    content: str
+
+
+class MessageOut(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: datetime
+
+    class Config:
+        orm_mode = True

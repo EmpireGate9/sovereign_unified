@@ -2,12 +2,16 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+# الملفات موجودة في مجلد backend داخل الريبو
+COPY backend/requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# انسخ كود الباكенд كله
+COPY backend .
 
-COPY entrypoint.sh /entrypoint.sh
+# سكربت التشغيل موجود داخل backend أيضًا
+COPY backend/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000

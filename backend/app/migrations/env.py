@@ -14,7 +14,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.config import settings
 from app.database import Base
-from .. import models
+from app import models
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

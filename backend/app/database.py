@@ -1,14 +1,28 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from .config import settings
+import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import declarative_base
 
-engine = create_engine(settings.database_url, connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# خذ متغير البيئة واستبدل السائق إلى asyncpg إن كان عاديًا
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+# محرك وجلسة غير متزامنين
+engine = create_async_engine(
+    DATABASE_URL,
+    future=True,
+    pool_pre_ping=True,
+)
+
+async_session_maker = async_sessionmaker(
+    bind=engine,
+    expire_on_commit=False,
+    class_=AsyncSession,
+)
+
 Base = declarative_base()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# تبعية FastAPI للجلسة
+async def get_db():
+    async with async_session_maker() as session:
+        yield session

@@ -1,13 +1,14 @@
-FROM python:3.12-slim
+FROM python:3.10-slim
+
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-COPY backend/requirements.txt ./requirements.txt
+
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY backend/ .
-EXPOSE 8000
-# why: run migrations first to avoid startup race
-CMD /bin/sh -lc "alembic -c /app/alembic.ini -x script_location=app/migrations upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+
+COPY . .
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+EXPOSE 8000
 CMD ["/entrypoint.sh"]

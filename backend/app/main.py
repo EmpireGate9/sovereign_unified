@@ -6,7 +6,7 @@ from .routers.files import router as files_router
 from .routers.vision import router as vision_router
 from .routers.voice import router as voice_router
 from .routers.chat import router as chat_router
-from .auth import router as auth_router
+from .routers.auth import router as auth_router
 
 app = FastAPI(title="Sovereign Core")
 

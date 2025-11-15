@@ -20,11 +20,18 @@ Base = declarative_base()
 
 
 def init_db() -> None:
+
     """Initialize database schema using the sync engine."""
+
     Base.metadata.create_all(bind=sync_engine)
 
 
+
 async def get_db() -> AsyncSession:
+
     """Provide AsyncSession dependency for routers."""
+
     async with AsyncSessionLocal() as session:
+
         yield session
+

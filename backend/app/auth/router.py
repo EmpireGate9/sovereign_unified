@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.database import get_db
 from app import models, schemas
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 
 @router.post("/register", response_model=schemas.UserOut)

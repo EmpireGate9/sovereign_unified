@@ -1,20 +1,28 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
+
+# نقرأ DATABASE_URL من البيئة كما هي (بدون +asyncpg)
 DATABASE_URL = os.environ["DATABASE_URL"]
 
+# محرّك متزامن عادي
 engine = create_engine(DATABASE_URL, future=True)
 
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+# Session عادية متزامنة
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+
 def init_db() -> None:
+    """Initialize database schema using the sync engine."""
     Base.metadata.create_all(bind=engine)
 
+
 def get_db():
-    db = SessionLocal()
+    """Provide sync Session dependency for routers."""
+    db: Session = SessionLocal()
     try:
         yield db
     finally:

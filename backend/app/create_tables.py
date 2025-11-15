@@ -2,7 +2,6 @@ from app.database import async_engine
 from sqlalchemy import text
 import asyncio
 
-async def create_tables():
     async with async_engine.begin() as conn:
         await conn.execute(text("""
         CREATE TABLE IF NOT EXISTS users (
@@ -16,4 +15,3 @@ async def create_tables():
         """))
         print("Users table created.")
 
-asyncio.run(create_tables())

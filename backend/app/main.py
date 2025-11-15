@@ -37,7 +37,6 @@ async def health():
 
 @app.on_event("startup")
 def on_startup():
-    import app.create_tables
     init_db()
 
 

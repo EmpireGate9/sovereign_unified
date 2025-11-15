@@ -24,7 +24,7 @@ def init_db() -> None:
 
     """Initialize database (tables are created by Alembic)."""
 
-    pass
+        Base.metadata.create_all(bind=sync_engine)
 
 
 

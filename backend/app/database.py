@@ -20,7 +20,9 @@ AsyncSessionLocal = async_sessionmaker(bind=async_engine, expire_on_commit=False
 Base = declarative_base()
 
 
-def init_db() -> None:
+def init_db():
+    Base.metadata.create_all(bind=sync_engine)
+    Base.metadata.create_all(bind=sync_engine)
 
     """Initialize database (tables are created by Alembic)."""
 

@@ -21,14 +21,20 @@ Base = declarative_base()
 
 
 def init_db() -> None:
-    """
-    تُنشئ كل الجداول إذا لم تكن موجودة.
-    يتم استدعاؤها في on_startup داخل app/main.py
-    """
-    Base.metadata.create_all(bind=sync_engine)
+
+    """Initialize database (tables are created by Alembic)."""
+
+    pass
+
 
 
 async def get_db() -> AsyncSession:
+
+    """Provide AsyncSession dependency for routers."""
+
+    async with AsyncSessionLocal() as session:
+
+        yield session
     """
     Dependency تُرجع AsyncSession للـ routers
     """

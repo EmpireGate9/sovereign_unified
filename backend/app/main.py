@@ -1,4 +1,4 @@
-from app.auth import router as auth_router
+from app.auth.router import router as auth_router
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,7 +21,7 @@ app.add_middleware(
 
 # نجمع كل الراوترات تحت /api
 api_router = APIRouter()
-api_router.include_router(auth_router)
+api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 
 api_router.include_router(files_router, prefix="/files", tags=["files"])
 api_router.include_router(vision_router, prefix="/vision", tags=["vision"])

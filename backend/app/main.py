@@ -6,7 +6,6 @@ from .routers.files import router as files_router
 from .routers.vision import router as vision_router
 from .routers.voice import router as voice_router
 from .routers.chat import router as chat_router
-from .routers.auth import router as auth_router
 
 app = FastAPI(title="Sovereign Core")
 
@@ -21,9 +20,8 @@ app.add_middleware(
 
 # نجمع كل الراوترات تحت /api
 api_router = APIRouter()
+api_router.include_router(auth_router)
 
-api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
-api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_router.include_router(files_router, prefix="/files", tags=["files"])
 api_router.include_router(vision_router, prefix="/vision", tags=["vision"])
 api_router.include_router(voice_router, prefix="/voice", tags=["voice"])

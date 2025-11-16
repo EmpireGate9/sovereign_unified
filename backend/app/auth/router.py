@@ -1,34 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-import os
-from datetime import datetime, timedelta
 
 from app.database import get_db
 from app import models, schemas
 
 router = APIRouter(tags=["auth"])
 
-# JWT إعدادات
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # أسبوع واحد
-
-def create_access_token(*, user_id: int) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode = {"sub": str(user_id), "exp": expire}
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    result = db.execute(select(models.User).where(models.User.email == user.email))
+    # تحقق هل الإيميل موجود
+    result = db.execute(
+        select(models.User).where(models.User.email == user.email)
+    )
     existing = result.scalar_one_or_none()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # إنشاء مستخدم جديد
     new_user = models.User(
         email=user.email,
-        hashed_password=user.password,
+        hashed_password=user.password,  # لاحقاً نستبدلها بتشفير حقيقي
         full_name=user.full_name or "",
     )
     db.add(new_user)
@@ -36,13 +29,18 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user
 
+
 @router.post("/login", response_model=schemas.Token)
 def login(credentials: schemas.Login, db: Session = Depends(get_db)):
-    result = db.execute(select(models.User).where(models.User.email == credentials.email))
+    # العثور على المستخدم
+    result = db.execute(
+        select(models.User).where(models.User.email == credentials.email)
+    )
     user = result.scalar_one_or_none()
 
+    # تحقق من كلمة المرور
     if not user or user.hashed_password != credentials.password:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    token = create_access_token(user_id=user.id)
-    return schemas.Token(access_token=token, token_type="bearer")
+    # حالياً نستخدم توكن ثابت بسيط
+    return schemas.Token(access_token="dummy-token", token_type="bearer")

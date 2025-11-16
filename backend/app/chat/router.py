@@ -19,14 +19,12 @@ async def send_chat(
     current_user: Optional[models.User] = Depends(get_optional_current_user),
 ):
     # تحديد المالك: مستخدم مسجّل أو زائر
-    user_id: Optional[int] = current_user.id if current_user else None
+    user_id = current_user.id if current_user else None
+    if user_id is None and not session_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session_id is required for anonymous users")
+
     session_id: Optional[str] = payload.session_id
 
-    if not user_id and not session_id:
-        # لا مستخدم ولا session_id => نرفض
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="session_id is required for anonymous chat",
         )
 
     # الحصول على المشروع أو إنشاؤه

@@ -10,3 +10,5 @@ pydantic-settings==2.6.1
 email-validator==2.2.0
 asyncpg
 psycopg2-binary
+python-jose[cryptography]
+passlib[bcrypt]

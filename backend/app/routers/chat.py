@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+router = APIRouter(tags=["chat"])
 
 @router.post("/send", response_model=schemas.MessageOut)
 def send_message(body: schemas.MessageCreate, db: Session = Depends(get_db)):

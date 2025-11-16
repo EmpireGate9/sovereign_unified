@@ -14,8 +14,10 @@ SECRET_KEY = "95ee7cbb36fe8cdbee34f9cefaa45b69d57ae50d07e21d29077de740f923ed17"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login",
+    auto_error=False,   # مهم جداً: يخلي التوكن اختياري
+)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()

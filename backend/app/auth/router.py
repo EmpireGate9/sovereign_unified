@@ -1,12 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from jose import jwt
+import os
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app import models, schemas
 
 router = APIRouter(tags=["auth"])
 
+# JWT إعدادات
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # أسبوع واحد
+
+def create_access_token(*, user_id: int) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode = {"sub": str(user_id), "exp": expire}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 @router.post("/register", response_model=schemas.UserOut)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
@@ -25,7 +37,6 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user
 
-
 @router.post("/login", response_model=schemas.Token)
 def login(credentials: schemas.Login, db: Session = Depends(get_db)):
     result = db.execute(select(models.User).where(models.User.email == credentials.email))
@@ -34,4 +45,5 @@ def login(credentials: schemas.Login, db: Session = Depends(get_db)):
     if not user or user.hashed_password != credentials.password:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    return schemas.Token(access_token="dummy-token", token_type="bearer")
+    token = create_access_token(user_id=user.id)
+    return schemas.Token(access_token=token, token_type="bearer")

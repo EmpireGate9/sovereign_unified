@@ -1,40 +1,52 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from ..database import get_db
-from .. import models, schemas
 
+from app.database import get_db
+from app.crud import messages as messages_crud
+from app.deps import get_current_user
+from app import schemas
+
+
+# لا نضع prefix هنا لأن main يضيف /api/chat
 router = APIRouter(tags=["chat"])
 
+
 @router.post("/send", response_model=schemas.MessageOut)
-def send_message(body: schemas.MessageCreate, db: Session = Depends(get_db)):
-    # حفظ رسالة المستخدم
-    user_msg = models.Message(
+def send_message(
+    body: schemas.MessageCreate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    # رسالة المستخدم
+    user_message = messages_crud.add_message(
+        db,
+        project_id=body.project_id,
         role="user",
         content=body.content,
-        project_id=0,
-        user_id=None
+        user_id=user.id,
     )
-    db.add(user_msg)
-    db.commit()
-    db.refresh(user_msg)
 
-    # رد تلقائي (Echo)
-    reply_text = f"تم استلام رسالتك: {body.content}"
-
-    assistant_msg = models.Message(
+    # رد مساعد بسيط (مؤقت لحين ربط الذكاء الاصطناعي)
+    messages_crud.add_message(
+        db,
+        project_id=body.project_id,
         role="assistant",
-        content=reply_text,
-        project_id=0,
-        user_id=None
+        content=f"Echo: {body.content[:100]}",
+        user_id=None,
     )
-    db.add(assistant_msg)
-    db.commit()
-    db.refresh(assistant_msg)
 
-    return assistant_msg
+    return user_message
 
 
 @router.get("/history")
-def history(limit: int = 50, db: Session = Depends(get_db)):
-    rows = db.query(models.Message).order_by(models.Message.id.desc()).limit(limit).all()
-    return [{"id": r.id, "role": r.role, "content": r.content} for r in rows[::-1]]
+def history(
+    project_id: int,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    rows = messages_crud.get_messages(db, project_id=project_id, limit=limit)
+    return [
+        {"id": r.id, "role": r.role, "content": r.content}
+        for r in rows[::-1]
+    ]

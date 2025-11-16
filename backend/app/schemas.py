@@ -1,6 +1,7 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
 from typing import Optional
+
+from pydantic import BaseModel, EmailStr
 
 
 class UserBase(BaseModel):
@@ -28,8 +29,9 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+
 class MessageCreate(BaseModel):
-    role: str
+    project_id: int
     content: str
 
 

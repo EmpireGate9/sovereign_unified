@@ -20,14 +20,12 @@ async def send_chat(
 ):
     # تحديد المالك: مستخدم مسجّل أو زائر
     user_id = current_user.id if current_user else None
-    session_id = payload.session_id
-    if user_id is None and not session_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session_id is required for anonymous users")
-    # FIX_REMOVED_WRONG_LINE
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session_id is required for anonymous users")
-
     session_id: Optional[str] = payload.session_id
 
+    if user_id is None and not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="session_id is required for anonymous users",
         )
 
     # الحصول على المشروع أو إنشاؤه
@@ -37,13 +35,22 @@ async def send_chat(
         # استخدام المشروع المرسل
         project = db.get(models.Project, payload.project_id)
         if not project:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found",
+            )
 
         # تحقّق بسيط من الصلاحيات
         if user_id and project.owner_id and project.owner_id != user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed for this project")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not allowed for this project",
+            )
         if session_id and project.session_id and project.session_id != session_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed for this project")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not allowed for this project",
+            )
     else:
         if user_id:
             # مستخدم مسجّل: ابحث عن مشروع افتراضي
@@ -87,8 +94,7 @@ async def send_chat(
                 db.commit()
                 db.refresh(project)
 
-    # هنا مكان استدعاء نموذج الذكاء الاصطناعي الحقيقي (OpenAI / الخ)
-    # حالياً نعيد رد تجريبي بسيط
+    # رد تجريبي مؤقت
     assistant_reply = f"Echo: {payload.content}"
 
     return {

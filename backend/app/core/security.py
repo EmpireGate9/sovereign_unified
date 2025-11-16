@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -9,15 +9,16 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models
 
-# مفتاح JWT النهائي
+# مفتاح JWT (لا تغيّره حتى لا تبطل التوكينات الحالية)
 SECRET_KEY = "95ee7cbb36fe8cdbee34f9cefaa45b69d57ae50d07e21d29077de740f923ed17"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/auth/login",
-    auto_error=False,   # مهم جداً: يخلي التوكن اختياري
+    auto_error=False,  # السماح بالطلبات بدون توكن
 )
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
@@ -27,71 +28,86 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def _get_user_by_id(db: Session, user_id: int) -> Optional[models.User]:
-    return db.query(models.User).filter(models.User.id == user_id).first()
+def _decode_token_or_401(token: str) -> dict:
+    """
+    تفكيك التوكن أو رفع 401 إذا كان غير صالح.
+    تستخدم في الدوال الإلزامية فقط.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return payload
 
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> models.User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        sub: Optional[str] = payload.get("sub")
-        if sub is None:
-            raise credentials_exception
-        user_id = int(sub)
-    except (JWTError, ValueError):
-        raise credentials_exception
+    """
+    دالة مصادقة إلزامية: تُستخدم في الروتات التي تتطلّب تسجيل دخول.
+    """
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    user = _get_user_by_id(db, user_id)
-    if user is None:
-        raise credentials_exception
+    payload = _decode_token_or_401(token)
+    sub = payload.get("sub")
+    if sub is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    try:
+        user_id = int(sub)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user id in token",
+        )
+
+    user = db.get(models.User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
     return user
 
 
 async def get_optional_current_user(
-    request: Request,
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> Optional[models.User]:
     """
-    تعيد User إذا كان هناك توكن صالح في الهيدر،
-    وتعيد None إذا لم يوجد توكن.
+    دالة مصادقة اختيارية: ترجع None إذا لم يوجد توكن أو كان غير صالح.
+    تستخدم في الدردشة (ضيف أو مستخدم).
     """
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.lower().startswith("bearer "):
-        # لا يوجد توكن => زائر
+    if not token:
         return None
 
-    token = auth_header.split(" ", 1)[1].strip()
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        sub: Optional[str] = payload.get("sub")
-        if sub is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        user_id = int(sub)
-    except (JWTError, ValueError):
-        # هنا نعتبره توكن غير صالح، وليس زائر عادي
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    except JWTError:
+        # لو التوكن خربان نعتبره كأنه غير موجود
+        return None
 
-    user = _get_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    sub = payload.get("sub")
+    if sub is None:
+        return None
+
+    try:
+        user_id = int(sub)
+    except ValueError:
+        return None
+
+    user = db.get(models.User, user_id)
     return user

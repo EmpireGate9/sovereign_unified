@@ -18,10 +18,11 @@ async def send_chat(
     db: Session = Depends(get_db),
     current_user: Optional[models.User] = Depends(get_optional_current_user),
 ):
-    # تحديد المالك: مستخدم مسجّل أو زائر
-    user_id = current_user.id if current_user else None
+    # إذا كان المستخدم مسجلاً نأخذ user_id، وإلا نستخدم session_id للضيف
+    user_id: Optional[int] = current_user.id if current_user else None
     session_id: Optional[str] = payload.session_id
 
+    # ضيف بدون session_id => خطأ
     if user_id is None and not session_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -40,18 +41,21 @@ async def send_chat(
                 detail="Project not found",
             )
 
-        # تحقّق بسيط من الصلاحيات
+        # صلاحيات المالك (مستخدم مسجل)
         if user_id and project.owner_id and project.owner_id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not allowed for this project",
             )
+
+        # صلاحيات الجلسة للضيف
         if session_id and project.session_id and project.session_id != session_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not allowed for this project",
             )
     else:
+        # لم يرسل project_id
         if user_id:
             # مستخدم مسجّل: ابحث عن مشروع افتراضي
             project = (
@@ -72,7 +76,7 @@ async def send_chat(
                 db.commit()
                 db.refresh(project)
         else:
-            # زائر: استخدم session_id
+            # زائر: ابحث عن مشروع حسب session_id
             project = (
                 db.execute(
                     select(models.Project)
@@ -94,7 +98,7 @@ async def send_chat(
                 db.commit()
                 db.refresh(project)
 
-    # رد تجريبي مؤقت
+    # هنا المفروض نستدعي نموذج الذكاء الاصطناعي الحقيقي
     assistant_reply = f"Echo: {payload.content}"
 
     return {

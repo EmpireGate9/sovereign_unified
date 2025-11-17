@@ -30,9 +30,12 @@ class Token(BaseModel):
     token_type: str
 
 
+from typing import Optional
+
 class MessageCreate(BaseModel):
-    project_id: int
     content: str
+    project_id: Optional[int] = None
+    session_id: Optional[str] = None
 
 
 class MessageOut(BaseModel):

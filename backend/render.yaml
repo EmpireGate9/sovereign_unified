@@ -11,7 +11,7 @@ services:
       - key: APP_ENV
         value: production
       - key: SECRET_KEY
-        generateValue: true
+value: "95ee7cbb36fe8cdbee34f9cefaa45b69d57ae50d07e21d29077de740f923ed17"
     healthCheckPath: /api/health
     autoDeploy: true
 

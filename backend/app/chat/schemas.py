@@ -6,4 +6,7 @@ class ChatRequest(BaseModel):
     project_id: Optional[int] = None
     session_id: Optional[str] = None
 
-# redeploy
+# يُستخدم من /api/chat/send حاليًا، نخليه يرث من ChatRequest
+# حتى يصبح project_id اختياري أيضًا
+class MessageCreate(ChatRequest):
+    pass

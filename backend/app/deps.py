@@ -12,7 +12,7 @@ class CurrentUser:
 
 def get_current_user(authorization: str | None = Header(default=None), db: AsyncSession = Depends(get_db)) -> CurrentUser:
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
+        return None
     token = authorization.split()[1]
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_alg])

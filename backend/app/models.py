@@ -42,14 +42,15 @@ class File(Base):
 
 class Message(Base):
     __tablename__ = "messages"
+
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
+    session_id = Column(String, nullable=True)
     role = Column(String, default="user")  # user/assistant/system
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    project = relationship("Project", back_populates="messages")
 
 class Task(Base):
     __tablename__ = "tasks"

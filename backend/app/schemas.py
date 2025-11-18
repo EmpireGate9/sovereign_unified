@@ -42,7 +42,8 @@ class MessageOut(BaseModel):
     id: int
     role: str
     content: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
+
 
     class Config:
         orm_mode = True

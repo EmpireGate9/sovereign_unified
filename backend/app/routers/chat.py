@@ -1,52 +1,52 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app import models, schemas
 from app.database import get_db
-from app.crud import messages as messages_crud
-from app.deps import get_current_user
-from app import schemas
 
-
-# لا نضع prefix هنا لأن main يضيف /api/chat
-router = APIRouter(tags=["chat"])
+router = APIRouter()
 
 
 @router.post("/send", response_model=schemas.MessageOut)
-def send_message(
-    body: schemas.MessageCreate,
+async def send_message(
+    request: schemas.MessageCreate,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    # رسالة المستخدم
-    user_message = messages_crud.add_message(
-        db,
-        project_id=body.project_id,
-        role="user",
-        content=body.content,
-        user_id=(user.id if user is not None else None),
-    )
+) -> schemas.MessageOut:
+    # إذا لم يرسل project_id نستخدم 1 كقيمة افتراضية
+    project_id = request.project_id if request.project_id is not None else 1
 
-    # رد مساعد بسيط (مؤقت لحين ربط الذكاء الاصطناعي)
-    messages_crud.add_message(
-        db,
-        project_id=body.project_id,
-        role="assistant",
-        content=f"Echo: {body.content[:100]}",
+    message = models.Message(
+        role="user",
+        content=request.content,
+        project_id=project_id,
+        session_id=request.session_id,
         user_id=None,
     )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return message
 
-    return user_message
 
-
-@router.get("/history")
-def history(
-    project_id: int,
-    limit: int = 50,
+@router.post("/reply", response_model=schemas.MessageOut)
+async def chat_reply(
+    request: schemas.MessageCreate,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    rows = messages_crud.get_messages(db, project_id=project_id, limit=limit)
-    return [
-        {"id": r.id, "role": r.role, "content": r.content}
-        for r in rows[::-1]
-    ]
+) -> schemas.MessageOut:
+    # نفس التعامل مع project_id
+    project_id = request.project_id if request.project_id is not None else 1
+
+    # رد مؤقت (لاحقًا نستبدله بكود الذكاء الاصطناعي الحقيقي)
+    ai_text = f"تم استلام رسالتك: {request.content}"
+
+    ai_message = models.Message(
+        role="assistant",
+        content=ai_text,
+        project_id=project_id,
+        session_id=request.session_id,
+        user_id=None,
+    )
+    db.add(ai_message)
+    db.commit()
+    db.refresh(ai_message)
+    return ai_message

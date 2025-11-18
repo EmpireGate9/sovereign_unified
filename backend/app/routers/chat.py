@@ -23,7 +23,7 @@ def send_message(
         project_id=body.project_id,
         role="user",
         content=body.content,
-        user_id=user.id,
+        user_id=(user.id if user is not None else None),
     )
 
     # رد مساعد بسيط (مؤقت لحين ربط الذكاء الاصطناعي)

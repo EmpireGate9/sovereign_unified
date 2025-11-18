@@ -13,3 +13,4 @@ python-jose[cryptography]
 python-jose[cryptography]
 
 passlib
+openai>=1.0.0

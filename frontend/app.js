@@ -119,24 +119,53 @@ function projectsView() {
 }
 
 async function createProject() {
-  const res = await fetch(`${BACKEND_URL}/projects`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + token
-    },
-    body: JSON.stringify({ name: p_name.value, description: p_desc.value })
-  });
-  alert(res.ok ? "تم إنشاء المشروع" : "فشل إنشاء المشروع");
+  const url = `${BACKEND_URL}/projects`;
+  const payload = { name: p_name.value, description: p_desc.value };
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await res.text();
+
+    // نعرض تفاصيل الطلب والرد لمعرفة السبب
+    projects_list.innerHTML =
+      `<pre>Status: ${res.status}\n` +
+      `URL: ${url}\n` +
+      `Request body: ${JSON.stringify(payload)}\n` +
+      `Response:\n${text}</pre>`;
+
+    if (res.ok) {
+      alert("تم إنشاء المشروع");
+    } else {
+      alert(`فشل إنشاء المشروع (status ${res.status})`);
+    }
+  } catch (e) {
+    projects_list.innerHTML = `<pre>Network error:\n${e}</pre>`;
+    alert("فشل الاتصال بالخادم");
+  }
 }
 
 async function listProjects() {
-  const res = await fetch(`${BACKEND_URL}/projects`, {
-    headers: { "Authorization": "Bearer " + token }
-  });
-  const data = await res.json();
-  projects_list.innerHTML =
-    "<ul>" + data.map(p => `<li>${p.id} — ${p.name}</li>`).join("") + "</ul>";
+  const url = `${BACKEND_URL}/projects`;
+  try {
+    const res = await fetch(url, {
+      headers: { "Authorization": "Bearer " + token }
+    });
+    const text = await res.text();
+    projects_list.innerHTML =
+      `<pre>Status: ${res.status}\n` +
+      `URL: ${url}\n` +
+      `Response:\n${text}</pre>`;
+  } catch (e) {
+    projects_list.innerHTML = `<pre>Network error:\n${e}</pre>`;
+  }
 }
 
 // ===================== الملفات =====================
@@ -185,23 +214,48 @@ function chatView() {
 }
 
 async function sendMsg() {
-  const res = await fetch(`${BACKEND_URL}/chat/send`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + token
-    },
-    body: JSON.stringify({ project_id: c_pid.value, content: c_text.value })
-  });
-  alert(res.ok ? "تم الإرسال" : "فشل الإرسال");
+  const url = `${BACKEND_URL}/chat/send`;
+  const body = { project_id: c_pid.value, content: c_text.value };
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify(body)
+    });
+
+    const text = await res.text();
+
+    chat_box.textContent =
+      `POST ${url}\n` +
+      `Status: ${res.status}\n` +
+      `Request body: ${JSON.stringify(body)}\n` +
+      `Response:\n${text}`;
+
+    alert(res.ok ? "تم الإرسال" : `خطأ في الدردشة (status ${res.status})`);
+  } catch (e) {
+    chat_box.textContent = `Network error:\n${e}`;
+    alert("فشل الاتصال بالدردشة");
+  }
 }
 
 async function loadHistory() {
-  const res = await fetch(
-    `${BACKEND_URL}/chat/history?project_id=` + encodeURIComponent(c_pid.value),
-    { headers: { "Authorization": "Bearer " + token } }
-  );
-  chat_box.textContent = await res.text();
+  const url = `${BACKEND_URL}/chat/history?project_id=` + encodeURIComponent(c_pid.value);
+  try {
+    const res = await fetch(url, {
+      headers: { "Authorization": "Bearer " + token }
+    });
+    const text = await res.text();
+    chat_box.textContent =
+      `GET ${url}\n` +
+      `Status: ${res.status}\n` +
+      `Response:\n${text}`;
+  } catch (e) {
+    chat_box.textContent = `Network error:\n${e}`;
+  }
 }
 
 // ===================== الصوت =====================
@@ -276,7 +330,8 @@ function visionView() {
 
   btn.onclick = async () => {
     if (!stream) {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const streamLocal = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream = streamLocal;
       v.srcObject = stream;
     } else {
       stream.getTracks().forEach(t => t.stop());

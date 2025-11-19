@@ -52,3 +52,21 @@ class ChatRequest(BaseModel):
     content: str
     project_id: Optional[int] = None
     session_id: Optional[str] = None
+# ==========================
+# Project Schemas (Required)
+# ==========================
+
+class ProjectBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class ProjectCreate(ProjectBase):
+    pass
+
+
+class ProjectOut(ProjectBase):
+    id: int
+
+    class Config:
+        orm_mode = True

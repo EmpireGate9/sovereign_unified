@@ -7,7 +7,8 @@ let token = localStorage.getItem("token") || "";
 
 // ===================== أداة عرض الواجهة =====================
 function setView(html) {
-  document.getElementById("view").innerHTML = html;
+  const v = document.getElementById("view");
+  if (v) v.innerHTML = html;
 }
 
 // ===================== صفحة الحساب الرئيسية =====================
@@ -19,7 +20,7 @@ function accountMainView() {
         <button onclick="showRegister()">تسجيل مستخدم جديد</button>
         <button onclick="showLogin()">دخول مستخدم مسجل</button>
       </div>
-      <p class="small">التوكن: <code>${token ? token.slice(0,16)+"..." : "—"}</code></p>
+      <p class="small">التوكن: <code>${token ? token.slice(0,16) + "..." : "—"}</code></p>
     </section>
   `);
 }
@@ -41,9 +42,9 @@ function showRegister() {
 }
 
 async function register() {
-  const email     = r_email.value;
-  const full_name = r_name.value;
-  const password  = r_pass.value;
+  const email     = document.getElementById("r_email").value;
+  const full_name = document.getElementById("r_name").value;
+  const password  = document.getElementById("r_pass").value;
 
   const res = await fetch(`${BACKEND_URL}${REGISTER_PATH}`, {
     method: "POST",
@@ -80,8 +81,8 @@ function showLogin() {
 }
 
 async function login() {
-  const email    = l_email.value;
-  const password = l_pass.value;
+  const email    = document.getElementById("l_email").value;
+  const password = document.getElementById("l_pass").value;
 
   const res = await fetch(`${BACKEND_URL}${LOGIN_PATH}`, {
     method: "POST",
@@ -119,8 +120,10 @@ function projectsView() {
 }
 
 async function createProject() {
-  const url = `${BACKEND_URL}/projects`;
-  const payload = { name: p_name.value, description: p_desc.value };
+  const url = `${BACKEND_URL}/api/api/projects`;
+  const name = document.getElementById("p_name").value;
+  const desc = document.getElementById("p_desc").value;
+  const payload = { name: name, description: desc };
 
   try {
     const res = await fetch(url, {
@@ -134,12 +137,14 @@ async function createProject() {
 
     const text = await res.text();
 
-    // نعرض تفاصيل الطلب والرد لمعرفة السبب
-    projects_list.innerHTML =
-      `<pre>Status: ${res.status}\n` +
-      `URL: ${url}\n` +
-      `Request body: ${JSON.stringify(payload)}\n` +
-      `Response:\n${text}</pre>`;
+    const box = document.getElementById("projects_list");
+    if (box) {
+      box.innerHTML =
+        `<pre>Status: ${res.status}\n` +
+        `URL: ${url}\n` +
+        `Request body: ${JSON.stringify(payload)}\n` +
+        `Response:\n${text}</pre>`;
+    }
 
     if (res.ok) {
       alert("تم إنشاء المشروع");
@@ -147,24 +152,33 @@ async function createProject() {
       alert(`فشل إنشاء المشروع (status ${res.status})`);
     }
   } catch (e) {
-    projects_list.innerHTML = `<pre>Network error:\n${e}</pre>`;
+    const box = document.getElementById("projects_list");
+    if (box) {
+      box.innerHTML = `<pre>Network error:\n${e}</pre>`;
+    }
     alert("فشل الاتصال بالخادم");
   }
 }
 
 async function listProjects() {
-  const url = `${BACKEND_URL}/projects`;
+  const url = `${BACKEND_URL}/api/api/projects`;
   try {
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + token }
     });
     const text = await res.text();
-    projects_list.innerHTML =
-      `<pre>Status: ${res.status}\n` +
-      `URL: ${url}\n` +
-      `Response:\n${text}</pre>`;
+    const box = document.getElementById("projects_list");
+    if (box) {
+      box.innerHTML =
+        `<pre>Status: ${res.status}\n` +
+        `URL: ${url}\n` +
+        `Response:\n${text}</pre>`;
+    }
   } catch (e) {
-    projects_list.innerHTML = `<pre>Network error:\n${e}</pre>`;
+    const box = document.getElementById("projects_list");
+    if (box) {
+      box.innerHTML = `<pre>Network error:\n${e}</pre>`;
+    }
   }
 }
 
@@ -183,9 +197,16 @@ function filesView() {
 }
 
 async function uploadFile() {
+  const projectId = document.getElementById("f_pid").value;
+  const fileInput = document.getElementById("file_input");
+  if (!fileInput.files.length) {
+    alert("اختر ملفاً أولاً");
+    return;
+  }
+
   const fd = new FormData();
-  fd.append("project_id", f_pid.value);
-  fd.append("f", file_input.files[0]);
+  fd.append("project_id", projectId);
+  fd.append("f", fileInput.files[0]);
 
   const res = await fetch(`${BACKEND_URL}/files/upload`, {
     method: "POST",
@@ -193,7 +214,9 @@ async function uploadFile() {
     body: fd
   });
 
-  file_resp.textContent = await res.text();
+  const txt = await res.text();
+  const box = document.getElementById("file_resp");
+  if (box) box.textContent = txt;
 }
 
 // ===================== الدردشة =====================
@@ -214,8 +237,10 @@ function chatView() {
 }
 
 async function sendMsg() {
+  const projectId = document.getElementById("c_pid").value;
+  const content   = document.getElementById("c_text").value;
   const url = `${BACKEND_URL}/chat/send`;
-  const body = { project_id: c_pid.value, content: c_text.value };
+  const body = { project_id: projectId, content: content };
 
   try {
     const res = await fetch(url, {
@@ -228,33 +253,45 @@ async function sendMsg() {
     });
 
     const text = await res.text();
-
-    chat_box.textContent =
-      `POST ${url}\n` +
-      `Status: ${res.status}\n` +
-      `Request body: ${JSON.stringify(body)}\n` +
-      `Response:\n${text}`;
+    const box = document.getElementById("chat_box");
+    if (box) {
+      box.textContent =
+        `POST ${url}\n` +
+        `Status: ${res.status}\n` +
+        `Request body: ${JSON.stringify(body)}\n` +
+        `Response:\n${text}`;
+    }
 
     alert(res.ok ? "تم الإرسال" : `خطأ في الدردشة (status ${res.status})`);
   } catch (e) {
-    chat_box.textContent = `Network error:\n${e}`;
+    const box = document.getElementById("chat_box");
+    if (box) {
+      box.textContent = `Network error:\n${e}`;
+    }
     alert("فشل الاتصال بالدردشة");
   }
 }
 
 async function loadHistory() {
-  const url = `${BACKEND_URL}/chat/history?project_id=` + encodeURIComponent(c_pid.value);
+  const projectId = document.getElementById("c_pid").value;
+  const url = `${BACKEND_URL}/chat/history?project_id=` + encodeURIComponent(projectId);
   try {
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + token }
     });
     const text = await res.text();
-    chat_box.textContent =
-      `GET ${url}\n` +
-      `Status: ${res.status}\n` +
-      `Response:\n${text}`;
+    const box = document.getElementById("chat_box");
+    if (box) {
+      box.textContent =
+        `GET ${url}\n` +
+        `Status: ${res.status}\n` +
+        `Response:\n${text}`;
+    }
   } catch (e) {
-    chat_box.textContent = `Network error:\n${e}`;
+    const box = document.getElementById("chat_box");
+    if (box) {
+      box.textContent = `Network error:\n${e}`;
+    }
   }
 }
 
@@ -280,7 +317,7 @@ function voiceView() {
     if (!mediaRecorder) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => _chunks.push(e.data);
+      mediaRecorder.ondataavailable = e => window._chunks.push(e.data);
       mediaRecorder.start();
       btn.textContent = "إيقاف التسجيل";
     } else {
@@ -292,11 +329,14 @@ function voiceView() {
 }
 
 async function uploadAudio() {
-  if (!_chunks || !_chunks.length) { alert("لا يوجد تسجيل"); return; }
-
-  const blob = new Blob(_chunks, { type: "audio/webm" });
+  if (!window._chunks || !window._chunks.length) {
+    alert("لا يوجد تسجيل");
+    return;
+  }
+  const projectId = document.getElementById("v_pid").value;
+  const blob = new Blob(window._chunks, { type: "audio/webm" });
   const fd = new FormData();
-  fd.append("project_id", v_pid.value);
+  fd.append("project_id", projectId);
   fd.append("audio", blob, "voice.webm");
 
   const res = await fetch(`${BACKEND_URL}/voice/upload`, {
@@ -305,8 +345,10 @@ async function uploadAudio() {
     body: fd
   });
 
-  voice_resp.textContent = await res.text();
-  _chunks = [];
+  const txt = await res.text();
+  const box = document.getElementById("voice_resp");
+  if (box) box.textContent = txt;
+  window._chunks = [];
 }
 
 // ===================== الكاميرا =====================
@@ -324,7 +366,7 @@ function visionView() {
     <pre id="img_resp" class="small">—</pre>
   </section>`);
 
-  let stream;
+  let stream = null;
   const v = document.getElementById("vid");
   const btn = document.getElementById("cam_btn");
 
@@ -343,8 +385,11 @@ function visionView() {
 
 async function snap() {
   const v = document.getElementById("vid");
-  if (!v.srcObject) { alert("شغل الكاميرا"); return; }
-
+  if (!v.srcObject) {
+    alert("شغل الكاميرا");
+    return;
+  }
+  const projectId = document.getElementById("i_pid").value;
   const cv = document.getElementById("cv");
   cv.width  = v.videoWidth;
   cv.height = v.videoHeight;
@@ -352,7 +397,7 @@ async function snap() {
 
   const blob = await new Promise(r => cv.toBlob(r, "image/png"));
   const fd = new FormData();
-  fd.append("project_id", i_pid.value);
+  fd.append("project_id", projectId);
   fd.append("image", blob, "snap.png");
 
   const res = await fetch(`${BACKEND_URL}/vision/upload`, {
@@ -361,7 +406,9 @@ async function snap() {
     body: fd
   });
 
-  img_resp.textContent = await res.text();
+  const txt = await res.text();
+  const box = document.getElementById("img_resp");
+  if (box) box.textContent = txt;
 }
 
 // ===================== الحوكمة =====================
@@ -378,23 +425,36 @@ function govView() {
 }
 
 async function createPolicy() {
-  const rulesText = pol_rules.value || "{}";
+  const name = document.getElementById("pol_name").value;
+  const rulesText = document.getElementById("pol_rules").value || "{}";
+  let rulesObj = {};
+  try {
+    rulesObj = JSON.parse(rulesText);
+  } catch (_) {
+    alert("صيغة JSON غير صحيحة في الحقول");
+    return;
+  }
+
   const res = await fetch(`${BACKEND_URL}/governance/policies`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": "Bearer " + token
     },
-    body: JSON.stringify({ name: pol_name.value, rules: JSON.parse(rulesText) })
+    body: JSON.stringify({ name: name, rules: rulesObj })
   });
-  pol_out.textContent = await res.text();
+  const txt = await res.text();
+  const box = document.getElementById("pol_out");
+  if (box) box.textContent = txt;
 }
 
 async function listPolicies() {
   const res = await fetch(`${BACKEND_URL}/governance/policies`, {
     headers: { "Authorization": "Bearer " + token }
   });
-  pol_out.textContent = await res.text();
+  const txt = await res.text();
+  const box = document.getElementById("pol_out");
+  if (box) box.textContent = txt;
 }
 
 // ===================== ربط أزرار التنقل =====================

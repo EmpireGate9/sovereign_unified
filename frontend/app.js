@@ -1,476 +1,269 @@
-// ===================== إعدادات عامة =====================
-const BACKEND_URL   = "https://sovereign-backend-rhel.onrender.com";
-const REGISTER_PATH = "/api/auth/register";
-const LOGIN_PATH    = "/api/auth/login";
-
+// =========================
+// إعدادات عامة
+// =========================
+const BACKEND_URL = "https://sovereign-backend-rhel.onrender.com";
 let token = localStorage.getItem("token") || "";
 
-// ===================== أداة عرض الواجهة =====================
+// دالة لتغيير محتوى منطقة العرض
 function setView(html) {
-  const v = document.getElementById("view");
-  if (v) v.innerHTML = html;
+  const view = document.getElementById("view");
+  if (view) view.innerHTML = html;
 }
 
-// ===================== صفحة الحساب الرئيسية =====================
-function accountMainView() {
+// دالة مساعدة لعرض التوكن أسفل الكارت
+function renderTokenLine() {
+  const t = localStorage.getItem("token") || "—";
+  return `<p class="small">التوكن: <code>${t ? t.slice(0, 24) + "..." : "—"}</code></p>`;
+}
+
+// =========================
+// واجهة الحساب (تسجيل / دخول)
+// =========================
+function authView() {
   setView(`
     <section class="card">
       <h3>الحساب</h3>
-      <div class="actions">
-        <button onclick="showRegister()">تسجيل مستخدم جديد</button>
-        <button onclick="showLogin()">دخول مستخدم مسجل</button>
+      <div class="row">
+        <div class="col">
+          <h4>تسجيل مستخدم جديد</h4>
+          <input id="r_email" placeholder="email@example.com" />
+          <input id="r_name"  placeholder="الاسم" />
+          <input id="r_pass"  type="password" placeholder="كلمة المرور" />
+          <div class="actions">
+            <button onclick="registerUser()">تسجيل</button>
+          </div>
+        </div>
+        <div class="col">
+          <h4>دخول مستخدم مسجل</h4>
+          <input id="l_email" placeholder="email@example.com" />
+          <input id="l_pass"  type="password" placeholder="كلمة المرور" />
+          <div class="actions">
+            <button onclick="loginUser()">دخول</button>
+          </div>
+        </div>
       </div>
-      <p class="small">التوكن: <code>${token ? token.slice(0,16) + "..." : "—"}</code></p>
+      ${renderTokenLine()}
     </section>
   `);
 }
 
-// ===================== نموذج التسجيل =====================
-function showRegister() {
-  setView(`
-    <section class="card">
-      <h3>تسجيل مستخدم جديد</h3>
-      <input id="r_email" placeholder="email@example.com" />
-      <input id="r_name"  placeholder="الاسم" />
-      <input id="r_pass"  type="password" placeholder="كلمة المرور" />
-      <div class="actions">
-        <button onclick="register()">تسجيل</button>
-        <button onclick="accountMainView()">رجوع</button>
-      </div>
-    </section>
-  `);
-}
+async function registerUser() {
+  try {
+    const email = document.getElementById("r_email").value.trim();
+    const name  = document.getElementById("r_name").value.trim();
+    const pass  = document.getElementById("r_pass").value;
 
-async function register() {
-  const email     = document.getElementById("r_email").value;
-  const full_name = document.getElementById("r_name").value;
-  const password  = document.getElementById("r_pass").value;
+    const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, full_name: name, password: pass })
+    });
 
-  const res = await fetch(`${BACKEND_URL}${REGISTER_PATH}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, full_name, password })
-  });
-
-  if (res.ok) {
-    alert("تم التسجيل بنجاح");
-    accountMainView();
-  } else {
-    let msg = "فشل التسجيل";
-    try {
-      const data = await res.json();
-      msg = data.detail || msg;
-    } catch (_) {}
-    alert(msg);
+    if (res.ok) {
+      alert("تم تسجيل مستخدم جديد");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.detail || "فشل التسجيل");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("خطأ في الاتصال بالخادم أثناء التسجيل");
   }
 }
 
-// ===================== نموذج الدخول =====================
-function showLogin() {
-  setView(`
-    <section class="card">
-      <h3>دخول مستخدم مسجل</h3>
-      <input id="l_email" placeholder="email@example.com" />
-      <input id="l_pass"  type="password" placeholder="كلمة المرور" />
-      <div class="actions">
-        <button onclick="login()">دخول</button>
-        <button onclick="accountMainView()">رجوع</button>
-      </div>
-    </section>
-  `);
-}
+async function loginUser() {
+  try {
+    const email = document.getElementById("l_email").value.trim();
+    const pass  = document.getElementById("l_pass").value;
 
-async function login() {
-  const email    = document.getElementById("l_email").value;
-  const password = document.getElementById("l_pass").value;
+    const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password: pass })
+    });
 
-  const res = await fetch(`${BACKEND_URL}${LOGIN_PATH}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
+    const data = await res.json().catch(() => ({}));
 
-  const data = await res.json().catch(() => ({ detail: "خطأ" }));
-
-  if (res.ok) {
-    token = data.access_token || data.token || "";
-    if (token) localStorage.setItem("token", token);
-    alert("تم تسجيل الدخول");
-    accountMainView();
-  } else {
-    alert(data.detail || "فشل الدخول");
+    if (res.ok && data.access_token) {
+      token = data.access_token;
+      localStorage.setItem("token", token);
+      alert("تم تسجيل الدخول");
+      authView(); // لإعادة عرض التوكن المحدّث
+    } else {
+      alert(data.detail || "فشل تسجيل الدخول");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("خطأ في الاتصال بالخادم أثناء الدخول");
   }
 }
 
-// ===================== المشاريع =====================
+// =========================
+// واجهة المشاريع
+// =========================
 function projectsView() {
   setView(`
-  <section class="card">
-    <h3>المشاريع</h3>
-    <div class="row">
-      <div class="col"><input id="p_name" placeholder="اسم المشروع"/></div>
-      <div class="col"><input id="p_desc" placeholder="وصف"/></div>
-    </div>
-    <div class="actions">
-      <button onclick="createProject()">إنشاء</button>
-      <button onclick="listProjects()">تحديث القائمة</button>
-    </div>
-    <div id="projects_list" class="card small">—</div>
-  </section>`);
+    <section class="card">
+      <h3>المشاريع</h3>
+      <div class="row">
+        <div class="col">
+          <input id="p_name" placeholder="اسم المشروع" />
+        </div>
+        <div class="col">
+          <input id="p_desc" placeholder="وصف المشروع" />
+        </div>
+      </div>
+      <div class="actions">
+        <button onclick="createProject()">إنشاء</button>
+        <button onclick="listProjects()">تحديث القائمة</button>
+      </div>
+      <div id="projects_list" class="card small">—</div>
+    </section>
+  `);
 }
 
 async function createProject() {
-  const url = `${BACKEND_URL}/api/api/projects`;
-  const name = document.getElementById("p_name").value;
-  const desc = document.getElementById("p_desc").value;
-  const payload = { name: name, description: desc };
-
+  const listBox = document.getElementById("projects_list");
   try {
+    const name = document.getElementById("p_name").value.trim();
+    const desc = document.getElementById("p_desc").value.trim();
+
+    const url = `${BACKEND_URL}/api/projects`;
+    const payload = { name, description: desc };
+
     const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + token
+        "Authorization": "Bearer " + (token || "")
       },
       body: JSON.stringify(payload)
     });
 
     const text = await res.text();
 
-    const box = document.getElementById("projects_list");
-    if (box) {
-      box.innerHTML =
-        `<pre>Status: ${res.status}\n` +
-        `URL: ${url}\n` +
-        `Request body: ${JSON.stringify(payload)}\n` +
-        `Response:\n${text}</pre>`;
+    if (listBox) {
+      listBox.innerHTML =
+        `<pre>Status: ${res.status}\nURL: ${url}\nRequest body: ${JSON.stringify(payload)}\nResponse:\n${text}</pre>`;
     }
 
     if (res.ok) {
       alert("تم إنشاء المشروع");
+      listProjects();
     } else {
-      alert(`فشل إنشاء المشروع (status ${res.status})`);
+      alert("فشل إنشاء المشروع");
     }
-  } catch (e) {
-    const box = document.getElementById("projects_list");
-    if (box) {
-      box.innerHTML = `<pre>Network error:\n${e}</pre>`;
-    }
-    alert("فشل الاتصال بالخادم");
+  } catch (err) {
+    console.error(err);
+    if (listBox) listBox.textContent = "خطأ في الاتصال بالخادم.";
+    alert("حدث خطأ أثناء إنشاء المشروع");
   }
 }
 
 async function listProjects() {
-  const url = `${BACKEND_URL}/api/api/projects`;
+  const listBox = document.getElementById("projects_list");
   try {
+    const url = `${BACKEND_URL}/api/projects`;
+
     const res = await fetch(url, {
-      headers: { "Authorization": "Bearer " + token }
+      headers: { "Authorization": "Bearer " + (token || "") }
     });
-    const text = await res.text();
-    const box = document.getElementById("projects_list");
-    if (box) {
-      box.innerHTML =
-        `<pre>Status: ${res.status}\n` +
-        `URL: ${url}\n` +
-        `Response:\n${text}</pre>`;
+
+    const data = await res.json().catch(() => []);
+
+    if (!res.ok) {
+      if (listBox) listBox.textContent = `Status: ${res.status} - فشل جلب المشاريع`;
+      return;
     }
-  } catch (e) {
-    const box = document.getElementById("projects_list");
-    if (box) {
-      box.innerHTML = `<pre>Network error:\n${e}</pre>`;
+
+    if (Array.isArray(data) && listBox) {
+      listBox.innerHTML =
+        "<ul>" +
+        data
+          .map(p => `<li>${p.id} — ${p.name} (${p.description || ""})</li>`)
+          .join("") +
+        "</ul>";
     }
+  } catch (err) {
+    console.error(err);
+    if (listBox) listBox.textContent = "خطأ في الاتصال أثناء جلب المشاريع.";
   }
 }
 
-// ===================== الملفات =====================
+// =========================
+// واجهات باقي الأقسام (مبسّطة)
+// =========================
 function filesView() {
   setView(`
-  <section class="card">
-    <h3>رفع الملفات</h3>
-    <div class="row">
-      <div class="col"><input id="f_pid" placeholder="Project ID"/></div>
-      <div class="col"><input id="file_input" type="file"/></div>
-    </div>
-    <div class="actions"><button onclick="uploadFile()">رفع</button></div>
-    <pre id="file_resp" class="small">—</pre>
-  </section>`);
+    <section class="card">
+      <h3>الملفات</h3>
+      <p class="small">سيتم تفعيل رفع الملفات بعد التأكد من عمل المشاريع والدردشة.</p>
+    </section>
+  `);
 }
 
-async function uploadFile() {
-  const projectId = document.getElementById("f_pid").value;
-  const fileInput = document.getElementById("file_input");
-  if (!fileInput.files.length) {
-    alert("اختر ملفاً أولاً");
-    return;
-  }
-
-  const fd = new FormData();
-  fd.append("project_id", projectId);
-  fd.append("f", fileInput.files[0]);
-
-  const res = await fetch(`${BACKEND_URL}/files/upload`, {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + token },
-    body: fd
-  });
-
-  const txt = await res.text();
-  const box = document.getElementById("file_resp");
-  if (box) box.textContent = txt;
-}
-
-// ===================== الدردشة =====================
 function chatView() {
   setView(`
-  <section class="card">
-    <h3>الدردشة</h3>
-    <div class="row">
-      <div class="col"><input id="c_pid"  placeholder="Project ID"/></div>
-      <div class="col"><input id="c_text" placeholder="اكتب رسالة"/></div>
-    </div>
-    <div class="actions">
-      <button onclick="sendMsg()">إرسال</button>
-      <button onclick="loadHistory()">تحديث</button>
-    </div>
-    <pre id="chat_box" class="small">—</pre>
-  </section>`);
+    <section class="card">
+      <h3>الدردشة</h3>
+      <p class="small">الدردشة مربوطة بالذكاء الاصطناعي من الخلفية. بعد التأكد من المشاريع سنفعّل الواجهة هنا.</p>
+    </section>
+  `);
 }
 
-async function sendMsg() {
-  const projectId = document.getElementById("c_pid").value;
-  const content   = document.getElementById("c_text").value;
-  const url = `${BACKEND_URL}/chat/send`;
-  const body = { project_id: projectId, content: content };
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + token
-      },
-      body: JSON.stringify(body)
-    });
-
-    const text = await res.text();
-    const box = document.getElementById("chat_box");
-    if (box) {
-      box.textContent =
-        `POST ${url}\n` +
-        `Status: ${res.status}\n` +
-        `Request body: ${JSON.stringify(body)}\n` +
-        `Response:\n${text}`;
-    }
-
-    alert(res.ok ? "تم الإرسال" : `خطأ في الدردشة (status ${res.status})`);
-  } catch (e) {
-    const box = document.getElementById("chat_box");
-    if (box) {
-      box.textContent = `Network error:\n${e}`;
-    }
-    alert("فشل الاتصال بالدردشة");
-  }
-}
-
-async function loadHistory() {
-  const projectId = document.getElementById("c_pid").value;
-  const url = `${BACKEND_URL}/chat/history?project_id=` + encodeURIComponent(projectId);
-  try {
-    const res = await fetch(url, {
-      headers: { "Authorization": "Bearer " + token }
-    });
-    const text = await res.text();
-    const box = document.getElementById("chat_box");
-    if (box) {
-      box.textContent =
-        `GET ${url}\n` +
-        `Status: ${res.status}\n` +
-        `Response:\n${text}`;
-    }
-  } catch (e) {
-    const box = document.getElementById("chat_box");
-    if (box) {
-      box.textContent = `Network error:\n${e}`;
-    }
-  }
-}
-
-// ===================== الصوت =====================
 function voiceView() {
   setView(`
-  <section class="card">
-    <h3>الصوت (تجريبي)</h3>
-    <div class="row"><div class="col"><input id="v_pid" placeholder="Project ID"/></div></div>
-    <div class="actions">
-      <button id="rec_btn">بدء التسجيل</button>
-      <button onclick="uploadAudio()">رفع المقطع</button>
-    </div>
-    <p class="small">يحتاج المتصفح دعم MediaRecorder.</p>
-    <pre id="voice_resp" class="small">—</pre>
-  </section>`);
-
-  window._chunks = [];
-  let mediaRecorder;
-  const btn = document.getElementById("rec_btn");
-
-  btn.onclick = async () => {
-    if (!mediaRecorder) {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => window._chunks.push(e.data);
-      mediaRecorder.start();
-      btn.textContent = "إيقاف التسجيل";
-    } else {
-      mediaRecorder.stop();
-      btn.textContent = "بدء التسجيل";
-      mediaRecorder = null;
-    }
-  };
+    <section class="card">
+      <h3>الصوت</h3>
+      <p class="small">ميزة الصوت تجريبية وسيتم تفعيلها لاحقًا.</p>
+    </section>
+  `);
 }
 
-async function uploadAudio() {
-  if (!window._chunks || !window._chunks.length) {
-    alert("لا يوجد تسجيل");
-    return;
-  }
-  const projectId = document.getElementById("v_pid").value;
-  const blob = new Blob(window._chunks, { type: "audio/webm" });
-  const fd = new FormData();
-  fd.append("project_id", projectId);
-  fd.append("audio", blob, "voice.webm");
-
-  const res = await fetch(`${BACKEND_URL}/voice/upload`, {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + token },
-    body: fd
-  });
-
-  const txt = await res.text();
-  const box = document.getElementById("voice_resp");
-  if (box) box.textContent = txt;
-  window._chunks = [];
-}
-
-// ===================== الكاميرا =====================
 function visionView() {
   setView(`
-  <section class="card">
-    <h3>الكاميرا (تجريبي)</h3>
-    <div class="row"><div class="col"><input id="i_pid" placeholder="Project ID"/></div></div>
-    <video id="vid" autoplay playsinline style="max-width:100%;border-radius:12px;border:1px solid #333"></video>
-    <div class="actions">
-      <button id="cam_btn">تشغيل/إيقاف</button>
-      <button onclick="snap()">التقاط & رفع</button>
-    </div>
-    <canvas id="cv" style="display:none"></canvas>
-    <pre id="img_resp" class="small">—</pre>
-  </section>`);
-
-  let stream = null;
-  const v = document.getElementById("vid");
-  const btn = document.getElementById("cam_btn");
-
-  btn.onclick = async () => {
-    if (!stream) {
-      const streamLocal = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream = streamLocal;
-      v.srcObject = stream;
-    } else {
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-      v.srcObject = null;
-    }
-  };
+    <section class="card">
+      <h3>الكاميرا</h3>
+      <p class="small">ميزة الكاميرا تجريبية وسيتم تفعيلها لاحقًا.</p>
+    </section>
+  `);
 }
 
-async function snap() {
-  const v = document.getElementById("vid");
-  if (!v.srcObject) {
-    alert("شغل الكاميرا");
-    return;
-  }
-  const projectId = document.getElementById("i_pid").value;
-  const cv = document.getElementById("cv");
-  cv.width  = v.videoWidth;
-  cv.height = v.videoHeight;
-  cv.getContext("2d").drawImage(v, 0, 0);
-
-  const blob = await new Promise(r => cv.toBlob(r, "image/png"));
-  const fd = new FormData();
-  fd.append("project_id", projectId);
-  fd.append("image", blob, "snap.png");
-
-  const res = await fetch(`${BACKEND_URL}/vision/upload`, {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + token },
-    body: fd
-  });
-
-  const txt = await res.text();
-  const box = document.getElementById("img_resp");
-  if (box) box.textContent = txt;
-}
-
-// ===================== الحوكمة =====================
 function govView() {
   setView(`
-  <section class="card">
-    <h3>الحوكمة</h3>
-    <input id="pol_name"  placeholder="اسم السياسة (admin فقط)"/>
-    <textarea id="pol_rules" placeholder='{"allow":["admin"],"deny":["*"]}'></textarea>
-    <div class="actions"><button onclick="createPolicy()">إنشاء سياسة</button></div>
-    <div class="actions"><button onclick="listPolicies()">عرض السياسات</button></div>
-    <pre id="pol_out" class="small">—</pre>
-  </section>`);
+    <section class="card">
+      <h3>الحوكمة</h3>
+      <p class="small">سيتم لاحقًا عرض سياسات الحوكمة هنا.</p>
+    </section>
+  `);
 }
 
-async function createPolicy() {
-  const name = document.getElementById("pol_name").value;
-  const rulesText = document.getElementById("pol_rules").value || "{}";
-  let rulesObj = {};
-  try {
-    rulesObj = JSON.parse(rulesText);
-  } catch (_) {
-    alert("صيغة JSON غير صحيحة في الحقول");
-    return;
-  }
+// =========================
+// ربط الأزرار بعد تحميل الصفحة
+// =========================
+window.addEventListener("DOMContentLoaded", () => {
+  const navAuth     = document.getElementById("nav-auth");
+  const navProjects = document.getElementById("nav-projects");
+  const navFiles    = document.getElementById("nav-files");
+  const navChat     = document.getElementById("nav-chat");
+  const navVoice    = document.getElementById("nav-voice");
+  const navVision   = document.getElementById("nav-vision");
+  const navGov      = document.getElementById("nav-gov");
 
-  const res = await fetch(`${BACKEND_URL}/governance/policies`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + token
-    },
-    body: JSON.stringify({ name: name, rules: rulesObj })
-  });
-  const txt = await res.text();
-  const box = document.getElementById("pol_out");
-  if (box) box.textContent = txt;
-}
+  if (navAuth)     navAuth.onclick     = authView;
+  if (navProjects) navProjects.onclick = projectsView;
+  if (navFiles)    navFiles.onclick    = filesView;
+  if (navChat)     navChat.onclick     = chatView;
+  if (navVoice)    navVoice.onclick    = voiceView;
+  if (navVision)   navVision.onclick   = visionView;
+  if (navGov)      navGov.onclick      = govView;
 
-async function listPolicies() {
-  const res = await fetch(`${BACKEND_URL}/governance/policies`, {
-    headers: { "Authorization": "Bearer " + token }
-  });
-  const txt = await res.text();
-  const box = document.getElementById("pol_out");
-  if (box) box.textContent = txt;
-}
+  // عرض صفحة الحساب افتراضياً
+  authView();
 
-// ===================== ربط أزرار التنقل =====================
-document.getElementById("nav-auth").onclick     = accountMainView;
-document.getElementById("nav-projects").onclick = projectsView;
-document.getElementById("nav-files").onclick    = filesView;
-document.getElementById("nav-chat").onclick     = chatView;
-document.getElementById("nav-voice").onclick    = voiceView;
-document.getElementById("nav-vision").onclick   = visionView;
-document.getElementById("nav-gov").onclick      = govView;
-
-// عرض صفحة الحساب أولاً
-accountMainView();
-
-// فحص الاتصال بالخلفية
-fetch(`${BACKEND_URL}/health`)
-  .then(r => r.json())
-  .then(d => console.log("Backend Connected:", d))
-  .catch(e => console.error("Connection failed:", e));
+  // فحص صحي للخلفية (اختياري – يظهر فقط في الكونسول)
+  fetch(`${BACKEND_URL}/api/health`)
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(d => console.log("Backend health:", d))
+    .catch(e => console.log("Health check failed:", e));
+});

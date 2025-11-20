@@ -7,8 +7,7 @@ from openai import OpenAI
 from app.database import get_db
 from app import models, schemas
 
-# ملاحظة مهمّة:
-# لا نضع /api أو /chat هنا لأن main.py يضيف prefix="/chat"
+# مهم: لا نضع prefix هنا، لأن main.py يضيف prefix="/chat"
 router = APIRouter(tags=["chat"])
 
 client = OpenAI()
@@ -16,44 +15,52 @@ client = OpenAI()
 SYSTEM_PROMPT = """
 أنت مساعد تحليلي داخل منصة «Sovereign / PAI-6 — لوحة سيادية».
 
-- المستخدم يعمل عادةً داخل مشروع له رقم (project_id)، ويمكنه رفع ملفات إلى هذا المشروع.
+- المستخدم يعمل داخل مشاريع لها أرقام (project_id)، ويمكنه رفع ملفات لكل مشروع.
 - يوجد في المنصة تبويب للملفات يحتوي زر «تحليل ومعالجة» لكل ملف؛ هذا الزر يستدعي نماذج الذكاء الاصطناعي
-  لتحليل الملف وتخزين ملخص التحليل في قاعدة البيانات كسجل مرتبط بالمشروع/الجلسة.
-- أنت لا تقرأ الملفات الخام مباشرة، لكن يمكنك الاعتماد على:
-  • رسائل المستخدم السابقة في نفس الجلسة (session_id).
-  • أي ملخصات أو تحليلات موجودة كسجلات سابقة في نفس الجلسة/المشروع.
+  لتحليل الملف وتخزين ملخص التحليل في قاعدة البيانات كسجل مرتبط بالمشروع.
 
-عند أسئلة من نوع:
-  «حلل الملف في المشروع 1»، «ما هي نتيجة تحليل ملف المخططات؟» إلخ:
-  - إذا وجدت في السجل تحليلات أو أوصافاً للملفات، استخدمها وقدّم إجابة مرتبة،
-    وركّز على:
-      • ما الذي يصفه الملف؟
-      • أهم النقاط أو المشاكل أو المخاطر.
-      • توصيات عملية للمستخدم.
-  - إذا لم تجد أي تحليل في السجل:
-      • لا تقل أبداً أنك لا تستطيع الوصول للملفات أو المشاريع.
-      • بدلاً من ذلك، اشرح للمستخدم باختصار أن عليه:
-          1) رفع الملف في تبويب «الملفات» للمشروع المناسب.
-          2) الضغط على زر «تحليل ومعالجة».
-          3) ثم يمكنه سؤالك عن النتائج أو نسخ جزء من التحليل داخل الدردشة.
-      • حاول أن تعطيه أيضاً أفكاراً عن نوع التحليل المفيد لهذا النوع من الملفات
-        (مثلاً ملفات عقود، مخططات هندسية، تقارير مالية...).
+- لديك الأنواع التالية من المعلومات:
+  1) رسائل الدردشة في هذه الجلسة (session_id).
+  2) رسائل تحليل محفوظة مرتبطة بالمشروع (project_id)؛
+     هذه الرسائل يكون محتواها عادة بصيغة مثل:
+     "[تحليل الملف: اسم_الملف] ... النص التحليلي ..."
 
-- أجب دائماً بالعربية الفصحى الواضحة، ويفضّل أن تقسّم الرد إلى فقرات أو نقاط.
-- تجنّب العبارات العامة من نوع: «لا يمكنني الوصول إلى ملفاتك» بدون أن تذكر للمستخدم
-  خطوات واضحة داخل النظام.
+- عند أسئلة من نوع:
+    «حلّل الملف في المشروع 1»،
+    «ما هي نتيجة تحليل ملف المخططات؟»،
+    «لخّص لي ما فهمته عن مشروع 3 من الملفات»:
+    * ابحث ذهنياً في النصوص التحليلية المحفوظة (المضمنة في سياق المحادثة)
+      واستخرج منها ما يخص المشروع، ثم:
+        - قدّم وصفاً عاماً للمشروع كما يظهر من التحليلات.
+        - استخرج النقاط المهمة والأرقام والكميات إن وُجدت.
+        - وضّح المخاطر أو الملاحظات.
+        - أعطِ توصيات عملية.
+
+- إذا لم تجد أي تحليل واضح في النصوص المتاحة:
+    * لا تقل "لا أستطيع الوصول إلى الملفات" بشكل مجرد.
+    * بدلاً من ذلك، اشرح للمستخدم باختصار أن عليه:
+        1) رفع الملف في تبويب «الملفات» للمشروع المناسب.
+        2) الضغط على زر «تحليل ومعالجة».
+        3) ثم سؤالك هنا عن النتائج أو لصق جزء من التحليل في الدردشة.
+    * وحاول إعطاء أفكار عن نوع التحليل المفيد لهذا النوع من الملفات
+      (عقود، مخططات هندسية، تقارير مالية، تقارير فحوصات، إلخ).
+
+- أجب دائماً بالعربية الفصحى الواضحة، ويفضّل تقسيم الرد إلى نقاط أو فقرات.
 """
 
 
+# =========================
+# 1) تخزين رسالة المستخدم فقط
+# =========================
 @router.post("/send", response_model=schemas.MessageOut)
 def send_message(
     message_in: schemas.MessageCreate,
     db: Session = Depends(get_db),
 ):
     """
-    يخزن رسالة المستخدم فقط (بدون استدعاء OpenAI).
+    يخزن رسالة المستخدم في قاعدة البيانات (بدون استدعاء OpenAI).
     """
-    user_id = 1  # مؤقتاً
+    user_id = 1  # مؤقتاً حتى ربطه بنظام الدخول
 
     db_message = models.Message(
         user_id=user_id,
@@ -68,20 +75,39 @@ def send_message(
     return db_message
 
 
+# =========================
+# 2) طلب رد من الذكاء الاصطناعي
+# =========================
 @router.post("/reply", response_model=schemas.MessageOut)
 def chat_reply(
     chat: schemas.ChatRequest,
     db: Session = Depends(get_db),
 ):
     """
-    يبني المحادثة من تاريخ الجلسة + SYSTEM_PROMPT،
-    يستدعي OpenAI، ثم يخزن رد المساعد.
+    يبني المحادثة من:
+      - SYSTEM_PROMPT
+      - تحليلات/رسائل المشروع (إن وجدت)
+      - تاريخ الجلسة الحالية
+      - رسالة المستخدم الجديدة
+
+    ثم يستدعي OpenAI ويخزن رد المساعد.
     """
     user_id = 1  # مؤقتاً
 
     if not chat.session_id:
         raise HTTPException(status_code=400, detail="session_id is required")
 
+    # --------- أ) جلب تحليلات المشروع (messages مرتبطة بالمشروع) ---------
+    project_messages: List[models.Message] = []
+    if chat.project_id is not None:
+        project_messages = (
+            db.query(models.Message)
+            .filter(models.Message.project_id == chat.project_id)
+            .order_by(models.Message.id.asc())
+            .all()
+        )
+
+    # --------- ب) جلب تاريخ الجلسة الحالية ---------
     q = db.query(models.Message).filter(
         models.Message.session_id == chat.session_id
     )
@@ -90,18 +116,34 @@ def chat_reply(
 
     history: List[models.Message] = q.order_by(models.Message.id.asc()).all()
 
+    # --------- ج) بناء الـ payload للموديل ---------
     messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    for msg in history:
+    # أولاً: نضيف تحليلات المشروع كـ "معلومات سياقية"
+    for msg in project_messages:
+        # نعتبر كل ما هو role="assistant" أو system سياق مساعد
+        role = "assistant" if msg.role in ("assistant", "system") else "user"
         messages_payload.append(
             {
-                "role": msg.role if msg.role in ("user", "assistant", "system") else "user",
+                "role": role,
+                "content": f"(سجل محفوظ للمشروع {chat.project_id}):\n{msg.content}",
+            }
+        )
+
+    # ثانياً: نضيف تاريخ الجلسة الحالية
+    for msg in history:
+        role = msg.role if msg.role in ("user", "assistant", "system") else "user"
+        messages_payload.append(
+            {
+                "role": role,
                 "content": msg.content,
             }
         )
 
+    # ثالثاً: نضيف رسالة المستخدم الحالية
     messages_payload.append({"role": "user", "content": chat.content})
 
+    # --------- د) استدعاء OpenAI ---------
     try:
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -115,6 +157,7 @@ def chat_reply(
 
     assistant_reply = completion.choices[0].message.content
 
+    # --------- هـ) تخزين رد المساعد ---------
     db_message = models.Message(
         user_id=user_id,
         project_id=chat.project_id,
@@ -125,9 +168,13 @@ def chat_reply(
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
+
     return db_message
 
 
+# =========================
+# 3) إرجاع سجل الدردشة
+# =========================
 @router.get("/history", response_model=List[schemas.MessageOut])
 def get_history(
     session_id: str = Query(..., description="معرّف الجلسة"),
@@ -135,7 +182,8 @@ def get_history(
     db: Session = Depends(get_db),
 ):
     """
-    يرجع سجل الدردشة لهذه الجلسة (مع إمكانية تضييقه على مشروع).
+    يرجع كل الرسائل في هذه الجلسة (مع إمكانية تضييقها على مشروع معيّن).
+    يستخدمه الفرونت لعرض السجل في تبويب الدردشة.
     """
     q = db.query(models.Message).filter(models.Message.session_id == session_id)
     if project_id is not None:

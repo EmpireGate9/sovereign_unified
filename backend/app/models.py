@@ -45,6 +45,7 @@ class File(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     project = relationship("Project", back_populates="files")
+    analyses = relationship("FileAnalysis", back_populates="file")  # تحليلات هذا الملف
 
 
 class Message(Base):
@@ -73,3 +74,16 @@ class Task(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     project = relationship("Project", back_populates="tasks")
+
+
+class FileAnalysis(Base):
+    __tablename__ = "file_analysis"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("files.id"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    # يمكن استخدام owner_id لاحقاً لو احتجنا
+    result_text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    file = relationship("File", back_populates="analyses")

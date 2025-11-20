@@ -71,13 +71,21 @@ function projectsView() {
 function filesView() {
   setView(`
   <section class="card">
-    <h3>رفع الملفات</h3>
+    <h3>الملفات</h3>
     <div class="row">
-      <div class="col"><input id="f_pid" placeholder="Project ID"/></div>
-      <div class="col"><input id="file_input" type="file"/></div>
+      <div class="col">
+        <input id="f_pid" placeholder="Project ID" />
+      </div>
+      <div class="col">
+        <input id="file_input" type="file" />
+      </div>
     </div>
-    <div class="actions"><button onclick="uploadFile()">رفع</button></div>
+    <div class="actions">
+      <button onclick="uploadFile()">رفع الملف</button>
+      <button onclick="listFiles()">عرض الملفات</button>
+    </div>
     <pre id="file_resp" class="small">—</pre>
+    <div id="files_list" class="card small" style="margin-top:12px; text-align:right">لا توجد ملفات بعد.</div>
   </section>
   `);
 }
@@ -255,6 +263,11 @@ async function login() {
 async function createProject() {
   const listBox = document.getElementById("projects_list");
   try {
+    if (!token) {
+      alert("يجب تسجيل الدخول أولاً");
+      return;
+    }
+
     const name = document.getElementById("p_name").value.trim();
     const desc = document.getElementById("p_desc").value.trim();
 
@@ -293,6 +306,11 @@ async function createProject() {
 async function listProjects() {
   const listBox = document.getElementById("projects_list");
   try {
+    if (!token) {
+      alert("يجب تسجيل الدخول أولاً");
+      return;
+    }
+
     const url = `${BACKEND_URL}/api/projects`;
 
     const res = await fetch(url, {
@@ -334,8 +352,23 @@ async function uploadFile() {
     const fileInput = document.getElementById("file_input");
     const out = document.getElementById("file_resp");
 
+    if (!token) {
+      alert("يجب تسجيل الدخول قبل رفع الملفات");
+      return;
+    }
+
+    if (!pidInput.value.trim()) {
+      alert("اكتب رقم المشروع أولاً");
+      return;
+    }
+
+    if (!fileInput.files || !fileInput.files[0]) {
+      alert("اختر ملفاً لرفعه");
+      return;
+    }
+
     const fd = new FormData();
-    fd.append("project_id", pidInput.value);
+    fd.append("project_id", pidInput.value.trim());
     fd.append("f", fileInput.files[0]);
 
     const url = `${BACKEND_URL}/api/files/upload`;
@@ -348,10 +381,142 @@ async function uploadFile() {
 
     const text = await res.text();
     if (out) out.textContent = text;
+
+    if (res.ok) {
+      // بعد نجاح الرفع، اعرض قائمة الملفات مباشرة
+      listFiles();
+    } else {
+      alert("فشل رفع الملف");
+    }
   } catch (err) {
     console.error(err);
     const out = document.getElementById("file_resp");
     if (out) out.textContent = "خطأ في رفع الملف.";
+  }
+}
+
+async function listFiles() {
+  try {
+    const pidInput = document.getElementById("f_pid");
+    const box = document.getElementById("files_list");
+
+    if (!pidInput || !pidInput.value.trim()) {
+      alert("اكتب رقم المشروع أولاً");
+      return;
+    }
+
+    if (!token) {
+      alert("يجب تسجيل الدخول أولاً");
+      return;
+    }
+
+    const projectId = pidInput.value.trim();
+    const url = `${BACKEND_URL}/api/files/list?project_id=${encodeURIComponent(projectId)}`;
+
+    const res = await fetch(url, {
+      headers: {
+        "Authorization": "Bearer " + (token || "")
+      }
+    });
+
+    if (!box) return;
+
+    if (!res.ok) {
+      const txt = await res.text();
+      box.innerHTML = `<pre>Status: ${res.status}\nURL: ${url}\nResponse:\n${txt}</pre>`;
+      return;
+    }
+
+    const data = await res.json().catch(() => []);
+
+    if (!Array.isArray(data) || data.length === 0) {
+      box.textContent = "لا توجد ملفات لهذا المشروع.";
+      return;
+    }
+
+    const rows = data.map(f => `
+      <tr>
+        <td>${f.id}</td>
+        <td>${f.filename}</td>
+        <td>${f.size_bytes ?? f.size ?? "?"} بايت</td>
+        <td>
+          <button onclick="analyzeFile(${f.id})">تحليل ومعالجة</button>
+        </td>
+      </tr>
+    `).join("");
+
+    box.innerHTML = `
+      <table style="width:100%; border-collapse:collapse; direction:rtl;">
+        <thead>
+          <tr>
+            <th style="text-align:right; border-bottom:1px solid #444;">ID</th>
+            <th style="text-align:right; border-bottom:1px solid #444;">الملف</th>
+            <th style="text-align:right; border-bottom:1px solid #444;">الحجم</th>
+            <th style="text-align:right; border-bottom:1px solid #444;">الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+      <pre id="analysis_box" class="small" style="margin-top:12px;">نتيجة التحليل ستظهر هنا.</pre>
+    `;
+  } catch (err) {
+    console.error(err);
+    const box = document.getElementById("files_list");
+    if (box) box.textContent = "خطأ في جلب قائمة الملفات.";
+  }
+}
+
+async function analyzeFile(fileId) {
+  try {
+    if (!token) {
+      alert("يجب تسجيل الدخول أولاً");
+      return;
+    }
+
+    const url = `${BACKEND_URL}/api/files/${fileId}/analyze`;
+    const box = document.getElementById("analysis_box");
+
+    if (box) {
+      box.textContent = "جاري التحليل والمعالجة...";
+    }
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + (token || "")
+      }
+    });
+
+    const text = await res.text();
+
+    if (!box) return;
+
+    if (!res.ok) {
+      box.textContent = `Status: ${res.status}\nResponse:\n${text}`;
+      alert("فشل التحليل");
+      return;
+    }
+
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // ليس JSON، نتركه كما هو
+    }
+
+    if (data && data.result) {
+      box.textContent = data.result;
+    } else if (data && data.analysis_result) {
+      box.textContent = data.analysis_result;
+    } else {
+      box.textContent = text;
+    }
+  } catch (err) {
+    console.error(err);
+    const box = document.getElementById("analysis_box");
+    if (box) box.textContent = "خطأ أثناء التحليل.";
   }
 }
 
@@ -403,7 +568,6 @@ async function sendMsg() {
     if (!res.ok) {
       alert("فشل الإرسال");
     } else {
-      // بعد الرد، يمكنك تحديث السجل بالكامل
       loadHistory();
     }
   } catch (err) {
@@ -533,6 +697,11 @@ async function createPolicy() {
     const rules = document.getElementById("pol_rules").value.trim() || "{}";
     const out   = document.getElementById("pol_out");
 
+    if (!token) {
+      alert("يجب تسجيل الدخول أولاً");
+      return;
+    }
+
     const url = `${BACKEND_URL}/api/governance/policies`;
 
     const res = await fetch(url, {
@@ -556,6 +725,12 @@ async function createPolicy() {
 async function listPolicies() {
   try {
     const out = document.getElementById("pol_out");
+
+    if (!token) {
+      alert("يجب تسجيل الدخول أولاً");
+      return;
+    }
+
     const url = `${BACKEND_URL}/api/governance/policies`;
 
     const res = await fetch(url, {

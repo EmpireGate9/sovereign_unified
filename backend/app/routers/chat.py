@@ -7,12 +7,12 @@ from openai import OpenAI
 from app.database import get_db
 from app import models, schemas
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+# ملاحظة مهمّة:
+# لا نضع /api أو /chat هنا لأن main.py يضيف prefix="/chat"
+router = APIRouter(tags=["chat"])
 
-# عميل OpenAI (يستخدم OPENAI_API_KEY من متغيرات البيئة)
 client = OpenAI()
 
-# تعليمات النظام الخاصة بالمنصة
 SYSTEM_PROMPT = """
 أنت مساعد تحليلي داخل منصة «Sovereign / PAI-6 — لوحة سيادية».
 
@@ -45,20 +45,15 @@ SYSTEM_PROMPT = """
 """
 
 
-# =========================
-# تخزين رسالة المستخدم فقط
-# =========================
 @router.post("/send", response_model=schemas.MessageOut)
 def send_message(
     message_in: schemas.MessageCreate,
     db: Session = Depends(get_db),
 ):
     """
-    يخزن رسالة المستخدم في قاعدة البيانات.
-    (لا يستدعي الذكاء الاصطناعي هنا)
+    يخزن رسالة المستخدم فقط (بدون استدعاء OpenAI).
     """
-    # حالياً نثبّت user_id = 1، ويمكن لاحقاً ربطه بنظام الدخول الحقيقي
-    user_id = 1
+    user_id = 1  # مؤقتاً
 
     db_message = models.Message(
         user_id=user_id,
@@ -73,24 +68,20 @@ def send_message(
     return db_message
 
 
-# =========================
-# طلب رد من الذكاء الاصطناعي
-# =========================
 @router.post("/reply", response_model=schemas.MessageOut)
 def chat_reply(
     chat: schemas.ChatRequest,
     db: Session = Depends(get_db),
 ):
     """
-    يبني محادثة من تاريخ الجلسة + تعليمات النظام، ثم يستدعي OpenAI
-    ويخزن رد المساعد في قاعدة البيانات.
+    يبني المحادثة من تاريخ الجلسة + SYSTEM_PROMPT،
+    يستدعي OpenAI، ثم يخزن رد المساعد.
     """
     user_id = 1  # مؤقتاً
 
     if not chat.session_id:
         raise HTTPException(status_code=400, detail="session_id is required")
 
-    # نجلب كل رسائل هذه الجلسة (ويمكن تضييقها على project_id إذا أُرسل)
     q = db.query(models.Message).filter(
         models.Message.session_id == chat.session_id
     )
@@ -101,7 +92,6 @@ def chat_reply(
 
     messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    # نضيف تاريخ الجلسة كما هو (roles: user / assistant / analysis ...)
     for msg in history:
         messages_payload.append(
             {
@@ -110,10 +100,8 @@ def chat_reply(
             }
         )
 
-    # أخيراً نضيف طلب المستخدم الحالي
     messages_payload.append({"role": "user", "content": chat.content})
 
-    # استدعاء OpenAI
     try:
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -127,7 +115,6 @@ def chat_reply(
 
     assistant_reply = completion.choices[0].message.content
 
-    # نخزن رد المساعد في قاعدة البيانات، ونربطه بالمشروع/الجلسة
     db_message = models.Message(
         user_id=user_id,
         project_id=chat.project_id,
@@ -138,13 +125,9 @@ def chat_reply(
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
-
     return db_message
 
 
-# =========================
-# إرجاع سجل الدردشة
-# =========================
 @router.get("/history", response_model=List[schemas.MessageOut])
 def get_history(
     session_id: str = Query(..., description="معرّف الجلسة"),
@@ -152,8 +135,7 @@ def get_history(
     db: Session = Depends(get_db),
 ):
     """
-    يرجع كل الرسائل في هذه الجلسة (مع إمكانية تضييقها على مشروع معيّن).
-    يستخدمه الفرونت لعرض السجل في تبويب الدردشة.
+    يرجع سجل الدردشة لهذه الجلسة (مع إمكانية تضييقه على مشروع).
     """
     q = db.query(models.Message).filter(models.Message.session_id == session_id)
     if project_id is not None:

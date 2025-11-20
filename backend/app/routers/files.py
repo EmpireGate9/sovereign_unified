@@ -21,7 +21,7 @@ def _ensure_upload_root():
 
 
 # =========================
-# 1) رفع ملف وربطه بالمشروع
+# 1) رفع ملف وربطه بمشروع (بدون تعقيد)
 # =========================
 @router.post("/upload")
 async def upload_file(
@@ -31,18 +31,14 @@ async def upload_file(
     user=Depends(get_current_user),
 ):
     """
-    رفع ملف وربطه بمشروع موجود.
-    لا نقيّد الآن برقم مالك المشروع لتفادي 404 مع المشاريع القديمة.
+    رفع ملف وربطه برقم مشروع معيّن.
+    لا نتحقق هنا من وجود المشروع في جدول projects لتفادي 404،
+    نستخدم project_id كما هو، مثلما كان يعمل سابقًا.
     """
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
 
     _ensure_upload_root()
-
-    # نتأكد فقط أن المشروع موجود برقم الـ ID
-    project = db.query(models.Project).filter(models.Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
 
     safe_name = f"{uuid4().hex}_{file.filename}"
     disk_path = os.path.join(UPLOAD_ROOT, safe_name)
@@ -83,15 +79,11 @@ def list_files(
     user=Depends(get_current_user),
 ):
     """
-    إرجاع قائمة الملفات المرتبطة بمشروع معيّن.
-    نتحقق فقط من وجود المشروع.
+    إرجاع قائمة الملفات المرتبطة برقم project_id معيّن.
+    لا نتحقق من جدول projects، فقط نقرأ من جدول files.
     """
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
-
-    project = db.query(models.Project).filter(models.Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
 
     files: List[models.File] = (
         db.query(models.File)
@@ -115,7 +107,6 @@ def list_files(
 # =========================
 # 3) تحليل ومعالجة ملف
 # =========================
-
 from pydantic import BaseModel
 
 
@@ -133,29 +124,24 @@ def analyze_file(
     """
     تحليل ملف باستخدام OpenAI وتخزين النتيجة في جدول messages
     كرسالة (assistant) مرتبطة بالمشروع.
+    نعتمد على project_id المخزَّن في السجل نفسه.
     """
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    project_id = body.project_id
-    file_id = body.file_id
-
-    # نتأكد أن المشروع موجود (بدون تقييد بالمالك الآن)
-    project = db.query(models.Project).filter(models.Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    # جلب الملف
+    # نجلب الملف فقط، ونتأكد أنه يطابق project_id القادم من الواجهة
     db_file = (
         db.query(models.File)
         .filter(
-            models.File.id == file_id,
-            models.File.project_id == project_id,
+            models.File.id == body.file_id,
+            models.File.project_id == body.project_id,
         )
         .first()
     )
     if not db_file:
         raise HTTPException(status_code=404, detail="File not found")
+
+    project_id = db_file.project_id
 
     # قراءة محتوى الملف من التخزين
     try:
@@ -206,16 +192,4 @@ def analyze_file(
         project_id=project_id,
         session_id=None,  # ممكن لاحقاً ربطه بجلسة
         role="assistant",
-        content=f"[تحليل الملف: {db_file.filename}]\n\n{analysis_text}",
-    )
-    db.add(analysis_message)
-    db.commit()
-    db.refresh(analysis_message)
-
-    return {
-        "ok": True,
-        "project_id": project_id,
-        "file_id": db_file.id,
-        "analysis_message_id": analysis_message.id,
-        "analysis": analysis_text,
-    }
+        content

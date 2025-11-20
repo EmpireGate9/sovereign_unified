@@ -11,7 +11,8 @@ from app.database import get_db
 from app import models
 from app.deps import get_current_user
 
-router = APIRouter(prefix="/api/files", tags=["files"])
+# لا نضع أي prefix هنا، لأن main.py يضيف "/files" بالفعل
+router = APIRouter(tags=["files"])
 
 client = OpenAI()
 UPLOAD_ROOT = "uploads"
@@ -205,4 +206,4 @@ def analyze_file(
         "file_id": db_file.id,
         "analysis_message_id": analysis_message.id,
         "analysis": analysis_text,
-        }
+    }

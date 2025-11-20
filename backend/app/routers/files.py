@@ -1,5 +1,3 @@
-# backend/app/routers/files.py
-
 from pathlib import Path
 import uuid
 
@@ -11,7 +9,7 @@ from app.database import get_db
 from app import models
 from app.deps import get_current_user
 
-# مهم: لا نضع prefix هنا، الـ main.py يضيف "/files"
+# لا نضع "/api" هنا، main.py يضيفها، وكذلك "/files"
 router = APIRouter(tags=["files"])
 
 client = OpenAI()
@@ -20,7 +18,7 @@ UPLOAD_ROOT = Path("uploaded_files")
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 
-# ========= رفع ملف =========
+# ========= رفع ملف (يتطلب توكن) =========
 @router.post("/upload")
 async def upload_file(
     project_id: int = Form(...),
@@ -30,11 +28,13 @@ async def upload_file(
 ):
     """
     رفع ملف وربطه بمشروع معيّن.
-    - يتحقق أولاً أن المشروع يخص هذا المستخدم.
-    - يخزّن الملف على القرص.
-    - يسجّل بيانات الملف في جدول files.
+    - يتطلب توكن صالح (get_current_user)
+    - يتحقق أن المشروع مملوك لهذا المستخدم
     """
-    # تحقق من وجود المشروع وملكيته
+    if not f.filename:
+        raise HTTPException(status_code=400, detail="لم يتم استلام ملف صالح")
+
+    # تحقق من ملكية المشروع
     project = (
         db.query(models.Project)
         .filter(
@@ -49,11 +49,8 @@ async def upload_file(
             detail="المشروع غير موجود أو لا تملك صلاحية عليه",
         )
 
-    if not f.filename:
-        raise HTTPException(status_code=400, detail="لم يتم استلام ملف صالح")
-
-    # مسار التخزين: uploaded_files/<project_id>/
-    proj_dir = UPLOAD_ROOT / str(project_id)
+    # مسار التخزين: uploaded_files/<user_id>/<project_id>/
+    proj_dir = UPLOAD_ROOT / str(user.id) / str(project_id)
     proj_dir.mkdir(parents=True, exist_ok=True)
 
     unique_name = f"{uuid.uuid4().hex}_{f.filename}"
@@ -85,7 +82,7 @@ async def upload_file(
     }
 
 
-# ========= قائمة الملفات لمشروع =========
+# ========= قائمة الملفات لمشروع (مع توكن) =========
 @router.get("/list")
 def list_files(
     project_id: int,
@@ -93,7 +90,7 @@ def list_files(
     user: models.User = Depends(get_current_user),
 ):
     """
-    إرجاع قائمة الملفات لمشروع معيّن يملكه المستخدم.
+    إرجاع قائمة الملفات لمشروع معيّن يخص المستخدم الحالي.
     """
     project = (
         db.query(models.Project)
@@ -127,7 +124,7 @@ def list_files(
     ]
 
 
-# ========= زر "تحليل ومعالجة" =========
+# ========= زر "تحليل ومعالجة" (مع توكن) =========
 @router.post("/{file_id}/analyze")
 def analyze_file(
     file_id: int,
@@ -135,14 +132,9 @@ def analyze_file(
     user: models.User = Depends(get_current_user),
 ):
     """
-    تحليل ومعالجة ملف معيّن:
-    - يتأكد أن الملف تابع لمشروع يملكه المستخدم.
-    - يقرأ محتوى الملف من المسار storage_path.
-    - يرسل ملخص محتوى (نصي) لنموذج OpenAI.
-    - يحفظ نتيجة التحليل في جدول file_analysis.
-    - يرجع نص التحليل للمستخدم بدون ذكر AI.
+    تحليل ومعالجة ملف معيّن تابع لمشروع يخص المستخدم الحالي.
     """
-    # جلب الملف مع التحقق من ملكية المشروع
+    # نضمن أن الملف تابع لمشروع مملوك للمستخدم
     file_obj = (
         db.query(models.File)
         .join(models.Project, models.File.project_id == models.Project.id)
@@ -165,12 +157,9 @@ def analyze_file(
             detail="الملف غير موجود على الخادم",
         )
 
-    # قراءة المحتوى (كتجربة أولية: نحاول اعتباره نصاً)
     raw_bytes = file_path.read_bytes()
-    # محاولة فك الترميز إلى نص (مع تجاهل الأخطاء للملفات الثنائية)
     text_preview = raw_bytes.decode("utf-8", errors="ignore")[:8000]
 
-    # استدعاء التحليل (بدون ذكر AI في النص)
     try:
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -185,12 +174,12 @@ def analyze_file(
                 {
                     "role": "user",
                     "content": (
-                        f"هذا جزء من محتوى ملف مرفوع في مشروع هندسي.\n"
+                        f"هذا جزء من محتوى ملف مرفوع في مشروع.\n"
                         f"اسم الملف: {file_obj.filename}\n"
                         f"حجم الملف (بايت): {file_obj.size}\n\n"
                         f"المحتوى النصي المتاح:\n{text_preview}\n\n"
                         "حلّل هذا المحتوى وأعطني:\n"
-                        "- ملخّص واضح بالعربية\n"
+                        "- ملخّص بالعربية\n"
                         "- النقاط الفنية أو الهندسية المهمة\n"
                         "- أي مخاطر أو ملاحظات\n"
                         "- توصيات عملية إن وُجدت"
@@ -205,14 +194,14 @@ def analyze_file(
             detail=f"خطأ أثناء التحليل: {exc}",
         )
 
-    # حفظ نتيجة التحليل في قاعدة البيانات
-    analysis = models.FileAnalysis(
-        file_id=file_obj.id,
-        project_id=file_obj.project_id,
-        result_text=analysis_text,
-    )
-    db.add(analysis)
-    db.commit()
+    if hasattr(models, "FileAnalysis"):
+        analysis = models.FileAnalysis(
+            file_id=file_obj.id,
+            project_id=file_obj.project_id,
+            result_text=analysis_text,
+        )
+        db.add(analysis)
+        db.commit()
 
     return {
         "ok": True,

@@ -9,7 +9,7 @@ from app.deps import get_current_user  # نفس الديبندنسي المست�
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
-# مجلد التخزين المحلي
+# مجلد التخزين المحلي داخل السيرفر
 UPLOAD_ROOT = "uploaded_files"
 os.makedirs(UPLOAD_ROOT, exist_ok=True)
 
@@ -22,21 +22,16 @@ async def upload_file(
     user=Depends(get_current_user),
 ):
     """
-    رفع ملف لمشروع معيّن يخص المستخدم الحالي.
+    رفع ملف لمشروع معيّن.
+    - نتحقق أن المشروع موجود فقط برقم الـ ID.
+    - إذا لم يوجد نرجع رسالة عربية واضحة.
     """
-    # التحقق أن المشروع موجود ويتبع هذا المستخدم
-    project = (
-        db.query(models.Project)
-        .filter(
-            models.Project.id == project_id,
-            models.Project.owner_id == user.id,
-        )
-        .first()
-    )
+
+    project = db.query(models.Project).get(project_id)
     if not project:
         raise HTTPException(
             status_code=400,
-            detail="لا يوجد مشروع بهذا الرقم تابع لهذا الحساب.",
+            detail="لا يوجد مشروع بهذا الرقم. فضلاً تأكد من رقم المشروع.",
         )
 
     # حفظ الملف على القرص
@@ -75,20 +70,15 @@ def list_files(
     user=Depends(get_current_user),
 ):
     """
-    عرض ملفات مشروع معيّن (فقط إذا كان يتبع المستخدم الحالي).
+    عرض ملفات مشروع معيّن.
+    - إذا لم يوجد المشروع نرجع رسالة عربية قصيرة.
     """
-    project = (
-        db.query(models.Project)
-        .filter(
-            models.Project.id == project_id,
-            models.Project.owner_id == user.id,
-        )
-        .first()
-    )
+
+    project = db.query(models.Project).get(project_id)
     if not project:
         raise HTTPException(
             status_code=400,
-            detail="لا يوجد مشروع بهذا الرقم تابع لهذا الحساب.",
+            detail="لا يوجد مشروع بهذا الرقم. فضلاً تأكد من رقم المشروع.",
         )
 
     files = (
@@ -107,4 +97,4 @@ def list_files(
             "created_at": f.created_at.isoformat() if f.created_at else None,
         }
         for f in files
-    ]
+        ]

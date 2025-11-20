@@ -6,9 +6,10 @@ import os
 
 from app.database import get_db
 from app import models
-from app.deps import get_current_user  # نفس دالة المستخدم الحالي
+from app.deps import get_current_user  # نفس الدالة التي تستخدمها في المشاريع
 
-router = APIRouter(tags=["files"])  # لا نضع prefix هنا
+# لا نضع prefix هنا، لأنه مضاف في main.py عبر include_router(prefix="/files")
+router = APIRouter(tags=["files"])
 
 # مجلد تخزين الملفات على السيرفر
 UPLOAD_ROOT = "uploaded_files"
@@ -18,19 +19,20 @@ os.makedirs(UPLOAD_ROOT, exist_ok=True)
 @router.post("/upload")
 async def upload_file(
     project_id: int = Form(...),
-    f: UploadFile = File(...),
+    file: UploadFile = File(...),   # <-- هنا الاسم "file" يطابق الموجود في app.js
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
     """
-    رفع ملف لمشروع معيّن.
-    يتأكد من التوكن (get_current_user) ثم يحفظ الملف ويربطه بالمشروع.
-    إذا كان رقم المشروع غير موجود يرجع رسالة عربية واضحة.
+    رفع ملف لمشروع معيّن:
+    - يشترط توكن صالح (get_current_user).
+    - يحاول حفظ الملف مربوطًا بـ project_id.
+    - إذا كان رقم المشروع غير موجود في جدول المشاريع، يرجع رسالة عربية واضحة.
     """
 
     # حفظ الملف على القرص
-    contents = await f.read()
-    unique_name = f"{uuid4().hex}_{f.filename}"
+    contents = await file.read()
+    unique_name = f"{uuid4().hex}_{file.filename}"
     storage_path = os.path.join(UPLOAD_ROOT, unique_name)
 
     with open(storage_path, "wb") as out:
@@ -38,8 +40,8 @@ async def upload_file(
 
     db_file = models.File(
         project_id=project_id,
-        filename=f.filename,
-        mime_type=f.content_type or "application/octet-stream",
+        filename=file.filename,
+        mime_type=file.content_type or "application/octet-stream",
         size=len(contents),
         storage_path=storage_path,
     )

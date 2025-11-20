@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from uuid import uuid4
 import os
 
 from app.database import get_db
 from app import models
-from app.deps import get_current_user  # نفس الديبندنسي المستخدم في المشاريع
+from app.deps import get_current_user  # نفس دالة التحقق المستخدمة في المشاريع
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
-# مجلد التخزين المحلي داخل السيرفر
+# مجلد تخزين الملفات داخل السيرفر
 UPLOAD_ROOT = "uploaded_files"
 os.makedirs(UPLOAD_ROOT, exist_ok=True)
 
@@ -23,16 +24,10 @@ async def upload_file(
 ):
     """
     رفع ملف لمشروع معيّن.
-    - نتحقق أن المشروع موجود فقط برقم الـ ID.
-    - إذا لم يوجد نرجع رسالة عربية واضحة.
+    - يطلب توكن صالح (get_current_user).
+    - يحاول حفظ الملف وإنشاء السجل مباشرة.
+    - في حال كان project_id غير موجود يفشل الحفظ ويرجع رسالة عربية.
     """
-
-    project = db.query(models.Project).get(project_id)
-    if not project:
-        raise HTTPException(
-            status_code=400,
-            detail="لا يوجد مشروع بهذا الرقم. فضلاً تأكد من رقم المشروع.",
-        )
 
     # حفظ الملف على القرص
     contents = await f.read()
@@ -42,22 +37,33 @@ async def upload_file(
     with open(storage_path, "wb") as out:
         out.write(contents)
 
-    # إنشاء سجل في قاعدة البيانات
     db_file = models.File(
-        project_id=project.id,
+        project_id=project_id,
         filename=f.filename,
         mime_type=f.content_type or "application/octet-stream",
         size=len(contents),
         storage_path=storage_path,
     )
-    db.add(db_file)
-    db.commit()
-    db.refresh(db_file)
+
+    try:
+        db.add(db_file)
+        db.commit()
+        db.refresh(db_file)
+    except IntegrityError:
+        # فشل بسبب مفتاح أجنبي (لا يوجد مشروع بهذا الـ id)
+        db.rollback()
+        # حذف الملف من القرص بما أنه لن يُستخدم
+        if os.path.exists(storage_path):
+            os.remove(storage_path)
+        raise HTTPException(
+            status_code=400,
+            detail="لا يوجد مشروع بهذا الرقم. فضلاً تأكد من رقم المشروع.",
+        )
 
     return {
         "ok": True,
         "file_id": db_file.id,
-        "project_id": project.id,
+        "project_id": db_file.project_id,
         "filename": db_file.filename,
         "size_bytes": db_file.size,
     }
@@ -71,15 +77,9 @@ def list_files(
 ):
     """
     عرض ملفات مشروع معيّن.
-    - إذا لم يوجد المشروع نرجع رسالة عربية قصيرة.
+    - إذا لم توجد أي ملفات نرجع قائمة فارغة.
+    - لا نرمي خطأ عند رقم مشروع غير موجود، فقط ترجع [].
     """
-
-    project = db.query(models.Project).get(project_id)
-    if not project:
-        raise HTTPException(
-            status_code=400,
-            detail="لا يوجد مشروع بهذا الرقم. فضلاً تأكد من رقم المشروع.",
-        )
 
     files = (
         db.query(models.File)

@@ -16,6 +16,9 @@ const GOV_BASE       = "/api/governance";
 // التوكن + session
 let token = localStorage.getItem("token") || "";
 
+// نحفظ البريد لنعرضه للمستخدم
+let currentUserEmail = localStorage.getItem("user_email") || "";
+
 function ensureSessionId() {
   let s = localStorage.getItem("session_id");
   if (!s) {
@@ -51,9 +54,30 @@ function showInfo(msg) {
 // واجهة الحساب
 // =======================
 function authView() {
+  const loggedIn = !!token;
+  const email = currentUserEmail || localStorage.getItem("user_email") || "";
+
+  const statusHtml = loggedIn
+    ? `
+      <p class="small" style="margin-bottom:8px">
+        أنت مسجّل الدخول${email ? ` كـ <strong>${email}</strong>` : ""}.
+      </p>
+      <div class="actions" style="margin-bottom:16px">
+        <button onclick="logout()">تسجيل الخروج</button>
+      </div>
+    `
+    : `
+      <p class="small" style="margin-bottom:16px">
+        لم تقم بتسجيل الدخول بعد.
+      </p>
+    `;
+
   setView(`
     <section class="card">
       <h2 style="text-align:right;margin-bottom:24px">الحساب</h2>
+
+      ${statusHtml}
+
       <div class="row">
         <div class="col">
           <h3>تسجيل مستخدم جديد</h3>
@@ -75,6 +99,16 @@ function authView() {
       </div>
     </section>
   `);
+}
+
+// زر تسجيل الخروج
+function logout() {
+  token = "";
+  currentUserEmail = "";
+  localStorage.removeItem("token");
+  localStorage.removeItem("user_email");
+  showInfo("تم تسجيل الخروج");
+  authView();
 }
 
 // =======================
@@ -277,7 +311,7 @@ async function register() {
 
     const text = await res.text();
     if (res.ok) {
-      showInfo("تم التسجيل بنجاح");
+      showInfo("تم التسجيل بنجاح. يمكنك الآن تسجيل الدخول.");
     } else {
       showError(text || "فشل التسجيل");
     }
@@ -302,9 +336,11 @@ async function login() {
 
     if (res.ok && data.access_token) {
       token = data.access_token;
+      currentUserEmail = email;
       localStorage.setItem("token", token);
+      localStorage.setItem("user_email", email);
       showInfo("تم تسجيل الدخول");
-      authView(); // فقط لتحديث الصفحة
+      authView(); // لتحديث حالة الحساب وزر تسجيل الخروج
     } else {
       showError(data.detail || "فشل تسجيل الدخول");
     }
@@ -463,41 +499,25 @@ async function listFiles() {
       return;
     }
 
-    const url = `${BACKEND_URL}${FILES_BASE}/list?project_id=${pid}`;
+    const url = `${BACKEND_URL + FILES_BASE}/list?project_id=${pid}`;
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
     const text = await res.text();
 
-    if (!res.ok) {
-      if (out) out.textContent = text || "فشل جلب الملفات.";
+    if (res.ok) {
+      if (out) out.textContent = text || "لا توجد ملفات لهذا المشروع حتى الآن.";
+    } else if (res.status === 404 || res.status === 422) {
+      if (out) out.textContent = "لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.";
+      showError("لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.");
+    } else {
+      if (out) out.textContent = text;
       showError("فشل جلب الملفات.");
-      return;
     }
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = [];
-    }
-
-    if (!Array.isArray(data) || data.length === 0) {
-      if (out) out.textContent = "لا توجد ملفات لهذا المشروع.";
-      return;
-    }
-
-    const lines = data.map((f) => {
-      const size = f.size_bytes ?? f.size ?? 0;
-      return `• ${f.id} — ${f.filename} (${size} بايت)`;
-    });
-
-    if (out) out.textContent = lines.join("\n");
   } catch (err) {
     console.error(err);
     if (out) out.textContent = "خطأ في جلب الملفات.";
-    showError("خطأ في جلب الملفات.");
   }
 }
 
@@ -540,6 +560,7 @@ async function sendMsg() {
       return;
     }
 
+    // بعد التخزين في قاعدة البيانات نطلب الرد من الذكاء الاصطناعي
     const replyUrl = BACKEND_URL + CHAT_BASE + "/reply";
     const replyRes = await fetch(replyUrl, {
       method: "POST",
@@ -556,7 +577,7 @@ async function sendMsg() {
 
     const replyText = await replyRes.text();
     if (!replyRes.ok) {
-      showError(replyText || "فشل الحصول على رد التحليل");
+      showError(replyText || "فشل الحصول على رد الذكاء الاصطناعي");
       return;
     }
 

@@ -6,7 +6,7 @@ const BACKEND_URL = "https://sovereign-backend-rhel.onrender.com";
 // مسارات ثابتة
 const REGISTER_PATH  = "/api/auth/register";
 const LOGIN_PATH     = "/api/auth/login";
-const PROJECTS_PATH  = "/api/api/projects";      // لاحظ /api/api حسب الباك إند الحالي
+const PROJECTS_PATH  = "/api/projects";
 const FILES_BASE     = "/api/files";
 const CHAT_BASE      = "/api/chat";
 const VOICE_BASE     = "/api/voice";

@@ -5,6 +5,7 @@ import os
 from uuid import uuid4
 
 from openai import OpenAI
+from pydantic import BaseModel
 
 from app.database import get_db
 from app import models
@@ -16,12 +17,12 @@ client = OpenAI()
 UPLOAD_ROOT = "uploads"
 
 
-def _ensure_upload_root():
+def _ensure_upload_root() -> None:
     os.makedirs(UPLOAD_ROOT, exist_ok=True)
 
 
 # =========================
-# 1) رفع ملف وربطه بمشروع (بدون تعقيد)
+# 1) رفع ملف وربطه بمشروع
 # =========================
 @router.post("/upload")
 async def upload_file(
@@ -32,8 +33,7 @@ async def upload_file(
 ):
     """
     رفع ملف وربطه برقم مشروع معيّن.
-    لا نتحقق هنا من وجود المشروع في جدول projects لتفادي 404،
-    نستخدم project_id كما هو، مثلما كان يعمل سابقًا.
+    لا نتحقق من وجود المشروع في جدول projects لتفادي أخطاء 404.
     """
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -80,7 +80,6 @@ def list_files(
 ):
     """
     إرجاع قائمة الملفات المرتبطة برقم project_id معيّن.
-    لا نتحقق من جدول projects، فقط نقرأ من جدول files.
     """
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -105,16 +104,16 @@ def list_files(
 
 
 # =========================
-# 3) تحليل ومعالجة ملف
+# 3) نموذج طلب التحليل
 # =========================
-from pydantic import BaseModel
-
-
 class AnalyzeInput(BaseModel):
     project_id: int
     file_id: int
 
 
+# =========================
+# 4) تحليل ومعالجة ملف
+# =========================
 @router.post("/analyze")
 def analyze_file(
     body: AnalyzeInput,
@@ -124,12 +123,11 @@ def analyze_file(
     """
     تحليل ملف باستخدام OpenAI وتخزين النتيجة في جدول messages
     كرسالة (assistant) مرتبطة بالمشروع.
-    نعتمد على project_id المخزَّن في السجل نفسه.
     """
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    # نجلب الملف فقط، ونتأكد أنه يطابق project_id القادم من الواجهة
+    # العثور على الملف مع التحقق من أنه تابع لنفس المشروع
     db_file = (
         db.query(models.File)
         .filter(
@@ -161,7 +159,7 @@ def analyze_file(
 
     # برومبت التحليل
     system_msg = (
-        "أنت مساعد تحليلي داخل منصة إدارة مشاريع هندسية وتجارية. "
+        "أنت مساعد تحليلي داخل منصة إدارة مشاريع. "
         "المطلوب: تحليل محتوى الملف التالي وإرجاع ملخص منظم يشمل: "
         "1) وصف عام، 2) النقاط المهمة، 3) الأرقام أو الكميات البارزة إن وجدت، "
         "4) المخاطر أو الملاحظات، 5) توصيات عملية قصيرة."
@@ -171,7 +169,10 @@ def analyze_file(
         {"role": "system", "content": system_msg},
         {
             "role": "user",
-            "content": f"هذا محتوى الملف المرتبط بالمشروع رقم {project_id}:\n\n{file_text[:12000]}",
+            "content": (
+                f"هذا محتوى الملف المرتبط بالمشروع رقم {project_id}:\n\n"
+                f"{file_text[:12000]}"
+            ),
         },
     ]
 
@@ -190,6 +191,18 @@ def analyze_file(
     analysis_message = models.Message(
         user_id=user.id,
         project_id=project_id,
-        session_id=None,  # ممكن لاحقاً ربطه بجلسة
+        session_id=None,
         role="assistant",
-        content
+        content=f"[تحليل الملف: {db_file.filename}]\n\n{analysis_text}",
+    )
+    db.add(analysis_message)
+    db.commit()
+    db.refresh(analysis_message)
+
+    return {
+        "ok": True,
+        "project_id": project_id,
+        "file_id": db_file.id,
+        "analysis_message_id": analysis_message.id,
+        "analysis": analysis_text,
+        }

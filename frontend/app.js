@@ -7,6 +7,17 @@ const LOGIN_PATH    = "/api/auth/login";
 
 let token = localStorage.getItem("token") || "";
 
+// session_id ثابت لكل متصفح (لتجميع المحادثة)
+let sessionId = localStorage.getItem("session_id");
+if (!sessionId) {
+  if (window.crypto && crypto.randomUUID) {
+    sessionId = crypto.randomUUID();
+  } else {
+    sessionId = Date.now().toString() + "-" + Math.random().toString(16).slice(2);
+  }
+  localStorage.setItem("session_id", sessionId);
+}
+
 // =======================
 // دوال عرض الواجهات
 // =======================
@@ -35,6 +46,7 @@ function authView() {
       </div>
     </div>
     <p class="small">التوكن: <code>${token ? token.slice(0, 16) + "..." : "—"}</code></p>
+    <p class="small">SESSION: <code>${sessionId}</code></p>
   </section>
   `);
 }
@@ -78,6 +90,7 @@ function chatView() {
       <div class="col"><input id="c_pid" placeholder="Project ID (اختياري)"/></div>
       <div class="col"><input id="c_text" placeholder="اكتب رسالة"/></div>
     </div>
+    <p class="small">Session ID: <code>${sessionId}</code></p>
     <div class="actions">
       <button onclick="sendMsg()">إرسال</button>
       <button onclick="loadHistory()">تحديث السجل</button>
@@ -226,7 +239,7 @@ async function login() {
       token = data.access_token;
       localStorage.setItem("token", token);
       alert("تم تسجيل الدخول");
-      authView(); // لتحديث عرض التوكن
+      authView(); // لتحديث عرض التوكن وsession id
     } else {
       alert(data.detail || "فشل تسجيل الدخول");
     }
@@ -348,11 +361,20 @@ async function uploadFile() {
 async function sendMsg() {
   const box = document.getElementById("chat_box");
   try {
-    const pid  = document.getElementById("c_pid").value.trim() || null;
+    const pid  = document.getElementById("c_pid").value.trim();
     const text = document.getElementById("c_text").value.trim();
 
-    const url = `${BACKEND_URL}/api/chat/send`;
-    const payload = { project_id: pid ? Number(pid) : null, content: text };
+    if (!text) {
+      alert("اكتب رسالة أولاً");
+      return;
+    }
+
+    const url = `${BACKEND_URL}/api/chat/reply`;
+    const payload = {
+      project_id: pid ? Number(pid) : null,
+      session_id: sessionId,
+      content: text
+    };
 
     const res = await fetch(url, {
       method: "POST",
@@ -363,17 +385,26 @@ async function sendMsg() {
       body: JSON.stringify(payload)
     });
 
-    const respText = await res.text();
+    const data = await res.json().catch(() => null);
 
     if (box) {
-      box.textContent =
-        `Status: ${res.status}\nURL: ${url}\nRequest body: ${JSON.stringify(payload)}\nResponse:\n${respText}`;
+      if (data && data.content) {
+        box.textContent =
+          `Status: ${res.status}\n` +
+          `URL: ${url}\n\n` +
+          `رسالة المساعد:\n${data.content}`;
+      } else {
+        box.textContent =
+          `Status: ${res.status}\nURL: ${url}\nResponse:\n` +
+          (JSON.stringify(data) || "—");
+      }
     }
 
-    if (res.ok) {
-      alert("تم الإرسال");
-    } else {
+    if (!res.ok) {
       alert("فشل الإرسال");
+    } else {
+      // بعد الرد، يمكنك تحديث السجل بالكامل
+      loadHistory();
     }
   } catch (err) {
     console.error(err);
@@ -386,18 +417,34 @@ async function loadHistory() {
   const box = document.getElementById("chat_box");
   try {
     const pid  = document.getElementById("c_pid").value.trim();
-    const url  = `${BACKEND_URL}/api/chat/history` +
-      (pid ? `?project_id=${encodeURIComponent(pid)}` : "");
+
+    let url = `${BACKEND_URL}/api/chat/history?session_id=${encodeURIComponent(sessionId)}`;
+    if (pid) {
+      url += `&project_id=${encodeURIComponent(pid)}`;
+    }
 
     const res  = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
-    const respText = await res.text();
+    const data = await res.json().catch(() => null);
 
-    if (box) {
-      box.textContent =
-        `Status: ${res.status}\nURL: ${url}\nResponse:\n${respText}`;
+    if (!res.ok) {
+      if (box) {
+        box.textContent =
+          `Status: ${res.status}\nURL: ${url}\nResponse:\n` +
+          (JSON.stringify(data) || "—");
+      }
+      return;
+    }
+
+    if (Array.isArray(data) && box) {
+      const txt = data
+        .map((m) => `[${m.role}] ${m.content}`)
+        .join("\n\n----------------------\n\n");
+      box.textContent = txt || "لا يوجد سجل بعد.";
+    } else if (box) {
+      box.textContent = JSON.stringify(data) || "—";
     }
   } catch (err) {
     console.error(err);
@@ -538,7 +585,7 @@ document.getElementById("nav-gov").onclick      = govView;
 // عرض صفحة الحساب افتراضياً
 authView();
 
-// فحص اتصال الباك إند (للاختبار)
+// فحص اتصال الباك إند
 fetch(`${BACKEND_URL}/api/health`)
   .then((r) => r.json())
   .then((d) => console.log("Backend Connected:", d))

@@ -7,25 +7,24 @@ const LOGIN_PATH    = "/api/auth/login";
 
 let token = localStorage.getItem("token") || "";
 
-// session_id ثابت لكل متصفح (لتجميع المحادثة)
+// نخزن Session ID لاستخدامه في الدردشة
 let sessionId = localStorage.getItem("session_id");
 if (!sessionId) {
-  if (window.crypto && crypto.randomUUID) {
-    sessionId = crypto.randomUUID();
-  } else {
-    sessionId = Date.now().toString() + "-" + Math.random().toString(16).slice(2);
-  }
+  sessionId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
   localStorage.setItem("session_id", sessionId);
 }
 
 // =======================
-// دوال عرض الواجهات
+// دالة مساعدة لتغيير الجزء المتغير في الصفحة
 // =======================
 function setView(html) {
   const v = document.getElementById("view");
   if (v) v.innerHTML = html;
 }
 
+// =======================
+// واجهة الحساب (تسجيل / دخول)
+// =======================
 function authView() {
   setView(`
   <section class="card">
@@ -34,23 +33,24 @@ function authView() {
       <div class="col">
         <h3>تسجيل مستخدم جديد</h3>
         <input id="r_email" placeholder="email@example.com" />
-        <input id="r_name" placeholder="الاسم" />
-        <input id="r_pass" type="password" placeholder="كلمة المرور" />
+        <input id="r_name"  placeholder="الاسم" />
+        <input id="r_pass"  type="password" placeholder="كلمة المرور" />
         <div class="actions"><button onclick="register()">تسجيل</button></div>
       </div>
       <div class="col">
         <h3>دخول مستخدم مسجل</h3>
         <input id="l_email" placeholder="email@example.com" />
-        <input id="l_pass" type="password" placeholder="كلمة المرور" />
+        <input id="l_pass"  type="password" placeholder="كلمة المرور" />
         <div class="actions"><button onclick="login()">دخول</button></div>
       </div>
     </div>
-    <p class="small">التوكن: <code>${token ? token.slice(0, 16) + "..." : "—"}</code></p>
-    <p class="small">SESSION: <code>${sessionId}</code></p>
   </section>
   `);
 }
 
+// =======================
+// واجهة المشاريع
+// =======================
 function projectsView() {
   setView(`
   <section class="card">
@@ -68,35 +68,37 @@ function projectsView() {
   `);
 }
 
+// =======================
+// واجهة الملفات
+// =======================
 function filesView() {
   setView(`
   <section class="card">
     <h3>الملفات</h3>
     <div class="row">
-      <div class="col">
-        <input id="f_pid" placeholder="Project ID" />
-      </div>
-      <div class="col">
-        <input id="file_input" type="file" />
-      </div>
+      <div class="col"><input id="f_pid" placeholder="رقم المشروع (Project ID)"/></div>
+      <div class="col"><input id="file_input" type="file"/></div>
     </div>
     <div class="actions">
       <button onclick="uploadFile()">رفع الملف</button>
       <button onclick="listFiles()">عرض الملفات</button>
+      <button onclick="analyzeSelectedFile()">تحليل الملف المحدد</button>
     </div>
-    <pre id="file_resp" class="small">—</pre>
-    <div id="files_list" class="card small" style="margin-top:12px; text-align:right">لا توجد ملفات بعد.</div>
+    <div id="files_box" class="card small">—</div>
   </section>
   `);
 }
 
+// =======================
+// واجهة الدردشة
+// =======================
 function chatView() {
   setView(`
   <section class="card">
     <h3>الدردشة</h3>
     <div class="row">
-      <div class="col"><input id="c_pid" placeholder="Project ID (اختياري)"/></div>
-      <div class="col"><input id="c_text" placeholder="اكتب رسالة"/></div>
+      <div class="col"><input id="c_pid"  placeholder="رقم المشروع (يمكن تركه فارغ)"/></div>
+      <div class="col"><input id="c_text" placeholder="اكتب رسالتك"/></div>
     </div>
     <p class="small">Session ID: <code>${sessionId}</code></p>
     <div class="actions">
@@ -108,12 +110,15 @@ function chatView() {
   `);
 }
 
+// =======================
+// واجهة الصوت
+// =======================
 function voiceView() {
   setView(`
   <section class="card">
     <h3>الصوت (تجريبي)</h3>
     <div class="row">
-      <div class="col"><input id="v_pid" placeholder="Project ID"/></div>
+      <div class="col"><input id="v_pid" placeholder="رقم المشروع"/></div>
     </div>
     <div class="actions">
       <button id="rec_btn">بدء التسجيل</button>
@@ -150,14 +155,17 @@ function voiceView() {
   }
 }
 
+// =======================
+// واجهة الكاميرا / الرؤية
+// =======================
 function visionView() {
   setView(`
   <section class="card">
     <h3>الكاميرا (تجريبي)</h3>
-    <div class="row"><div class="col"><input id="i_pid" placeholder="Project ID"/></div></div>
+    <div class="row"><div class="col"><input id="i_pid" placeholder="رقم المشروع"/></div></div>
     <video id="vid" autoplay playsinline style="max-width:100%;border-radius:12px;border:1px solid #333"></video>
     <div class="actions">
-      <button id="cam_btn">تشغيل/إيقاف</button>
+      <button id="cam_btn">تشغيل/إيقاف الكاميرا</button>
       <button onclick="snap()">التقاط & رفع</button>
     </div>
     <canvas id="cv" style="display:none"></canvas>
@@ -188,11 +196,14 @@ function visionView() {
   }
 }
 
+// =======================
+// واجهة الحوكمة
+// =======================
 function govView() {
   setView(`
   <section class="card">
     <h3>الحوكمة</h3>
-    <input id="pol_name" placeholder="اسم السياسة (admin فقط)"/>
+    <input id="pol_name"  placeholder="اسم السياسة (admin فقط)"/>
     <textarea id="pol_rules" placeholder='{"allow":["admin"],"deny":["*"]}'></textarea>
     <div class="actions">
       <button onclick="createPolicy()">إنشاء سياسة</button>
@@ -220,7 +231,7 @@ async function register() {
 
     const text = await res.text();
     if (res.ok) {
-      alert("تم التسجيل");
+      alert("تم التسجيل بنجاح");
     } else {
       alert(text || "فشل التسجيل");
     }
@@ -247,7 +258,7 @@ async function login() {
       token = data.access_token;
       localStorage.setItem("token", token);
       alert("تم تسجيل الدخول");
-      authView(); // لتحديث عرض التوكن وsession id
+      authView(); // تحديث واجهة الحساب بعد الدخول
     } else {
       alert(data.detail || "فشل تسجيل الدخول");
     }
@@ -263,15 +274,10 @@ async function login() {
 async function createProject() {
   const listBox = document.getElementById("projects_list");
   try {
-    if (!token) {
-      alert("يجب تسجيل الدخول أولاً");
-      return;
-    }
-
     const name = document.getElementById("p_name").value.trim();
     const desc = document.getElementById("p_desc").value.trim();
 
-    const url = `${BACKEND_URL}/api/projects`;
+    const url = `${BACKEND_URL}/api/api/projects`;
     const payload = { name, description: desc };
 
     const res = await fetch(url, {
@@ -306,12 +312,7 @@ async function createProject() {
 async function listProjects() {
   const listBox = document.getElementById("projects_list");
   try {
-    if (!token) {
-      alert("يجب تسجيل الدخول أولاً");
-      return;
-    }
-
-    const url = `${BACKEND_URL}/api/projects`;
+    const url = `${BACKEND_URL}/api/api/projects`;
 
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
@@ -348,22 +349,16 @@ async function listProjects() {
 // =======================
 async function uploadFile() {
   try {
-    const pidInput = document.getElementById("f_pid");
+    const pidInput  = document.getElementById("f_pid");
     const fileInput = document.getElementById("file_input");
-    const out = document.getElementById("file_resp");
-
-    if (!token) {
-      alert("يجب تسجيل الدخول قبل رفع الملفات");
-      return;
-    }
+    const out       = document.getElementById("files_box");
 
     if (!pidInput.value.trim()) {
-      alert("اكتب رقم المشروع أولاً");
+      alert("فضلاً أدخل رقم المشروع.");
       return;
     }
-
     if (!fileInput.files || !fileInput.files[0]) {
-      alert("اختر ملفاً لرفعه");
+      alert("فضلاً اختر ملفاً لرفعه.");
       return;
     }
 
@@ -380,166 +375,102 @@ async function uploadFile() {
     });
 
     const text = await res.text();
-    if (out) out.textContent = text;
-
     if (res.ok) {
-      // بعد نجاح الرفع، اعرض قائمة الملفات مباشرة
-      listFiles();
+      out.textContent = text;
+      alert("تم رفع الملف بنجاح");
     } else {
+      out.textContent = text || "فشل رفع الملف";
       alert("فشل رفع الملف");
     }
   } catch (err) {
     console.error(err);
-    const out = document.getElementById("file_resp");
+    const out = document.getElementById("files_box");
     if (out) out.textContent = "خطأ في رفع الملف.";
+    alert("خطأ في رفع الملف");
   }
 }
 
 async function listFiles() {
+  const out = document.getElementById("files_box");
   try {
-    const pidInput = document.getElementById("f_pid");
-    const box = document.getElementById("files_list");
-
-    if (!pidInput || !pidInput.value.trim()) {
-      alert("اكتب رقم المشروع أولاً");
+    const pid = document.getElementById("f_pid").value.trim();
+    if (!pid) {
+      alert("فضلاً أدخل رقم المشروع.");
       return;
     }
 
-    if (!token) {
-      alert("يجب تسجيل الدخول أولاً");
-      return;
-    }
-
-    const projectId = pidInput.value.trim();
-    const url = `${BACKEND_URL}/api/files/list?project_id=${encodeURIComponent(projectId)}`;
+    const url = `${BACKEND_URL}/api/files/list?project_id=${encodeURIComponent(pid)}`;
 
     const res = await fetch(url, {
-      headers: {
-        "Authorization": "Bearer " + (token || "")
-      }
-    });
-
-    if (!box) return;
-
-    if (!res.ok) {
-      const txt = await res.text();
-      box.innerHTML = `<pre>Status: ${res.status}\nURL: ${url}\nResponse:\n${txt}</pre>`;
-      return;
-    }
-
-    const data = await res.json().catch(() => []);
-
-    if (!Array.isArray(data) || data.length === 0) {
-      box.textContent = "لا توجد ملفات لهذا المشروع.";
-      return;
-    }
-
-    const rows = data.map(f => `
-      <tr>
-        <td>${f.id}</td>
-        <td>${f.filename}</td>
-        <td>${f.size_bytes ?? f.size ?? "?"} بايت</td>
-        <td>
-          <button onclick="analyzeFile(${f.id})">تحليل ومعالجة</button>
-        </td>
-      </tr>
-    `).join("");
-
-    box.innerHTML = `
-      <table style="width:100%; border-collapse:collapse; direction:rtl;">
-        <thead>
-          <tr>
-            <th style="text-align:right; border-bottom:1px solid #444;">ID</th>
-            <th style="text-align:right; border-bottom:1px solid #444;">الملف</th>
-            <th style="text-align:right; border-bottom:1px solid #444;">الحجم</th>
-            <th style="text-align:right; border-bottom:1px solid #444;">الإجراءات</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
-      <pre id="analysis_box" class="small" style="margin-top:12px;">نتيجة التحليل ستظهر هنا.</pre>
-    `;
-  } catch (err) {
-    console.error(err);
-    const box = document.getElementById("files_list");
-    if (box) box.textContent = "خطأ في جلب قائمة الملفات.";
-  }
-}
-
-async function analyzeFile(fileId) {
-  try {
-    if (!token) {
-      alert("يجب تسجيل الدخول أولاً");
-      return;
-    }
-
-    const url = `${BACKEND_URL}/api/files/${fileId}/analyze`;
-    const box = document.getElementById("analysis_box");
-
-    if (box) {
-      box.textContent = "جاري التحليل والمعالجة...";
-    }
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + (token || "")
-      }
+      headers: { "Authorization": "Bearer " + (token || "") }
     });
 
     const text = await res.text();
 
-    if (!box) return;
-
     if (!res.ok) {
-      box.textContent = `Status: ${res.status}\nResponse:\n${text}`;
-      alert("فشل التحليل");
+      let msg = "حدث خطأ أثناء جلب الملفات.";
+      if (res.status === 404) {
+        msg = "لا يوجد مشروع بهذا الرقم.";
+      } else if (res.status === 422) {
+        msg = "فضلاً أدخل رقم مشروع صحيح (قيمة رقمية).";
+      }
+      if (out) out.textContent = msg;
+      alert(msg);
+      console.warn("Files error:", text);
       return;
     }
 
-    let data = null;
+    let data;
     try {
       data = JSON.parse(text);
     } catch {
-      // ليس JSON، نتركه كما هو
+      data = [];
     }
 
-    if (data && data.result) {
-      box.textContent = data.result;
-    } else if (data && data.analysis_result) {
-      box.textContent = data.analysis_result;
-    } else {
-      box.textContent = text;
-    }
-  } catch (err) {
-    console.error(err);
-    const box = document.getElementById("analysis_box");
-    if (box) box.textContent = "خطأ أثناء التحليل.";
-  }
-}
-
-// =======================
-// دوال الدردشة
-// =======================
-async function sendMsg() {
-  const box = document.getElementById("chat_box");
-  try {
-    const pid  = document.getElementById("c_pid").value.trim();
-    const text = document.getElementById("c_text").value.trim();
-
-    if (!text) {
-      alert("اكتب رسالة أولاً");
+    if (!Array.isArray(data) || !data.length) {
+      out.textContent = "لا توجد ملفات لهذا المشروع.";
       return;
     }
 
-    const url = `${BACKEND_URL}/api/chat/reply`;
-    const payload = {
-      project_id: pid ? Number(pid) : null,
-      session_id: sessionId,
-      content: text
-    };
+    // نبني قائمة بسيطة مع إشارة للملف الأول كمختار افتراضياً
+    out.innerHTML =
+      "<ul>" +
+      data
+        .map(
+          (f, idx) =>
+            `<li>
+               <label>
+                 <input type="radio" name="file_select" value="${f.id}" ${idx === 0 ? "checked" : ""}/>
+                 ${f.id} — ${f.filename} (${f.size} بايت)
+               </label>
+             </li>`
+        )
+        .join("") +
+      "</ul>";
+  } catch (err) {
+    console.error(err);
+    if (out) out.textContent = "خطأ في الاتصال أثناء جلب الملفات.";
+    alert("خطأ في الاتصال أثناء جلب الملفات");
+  }
+}
+
+async function analyzeSelectedFile() {
+  const out = document.getElementById("files_box");
+  try {
+    const pid = document.getElementById("f_pid").value.trim();
+    if (!pid) {
+      alert("فضلاً أدخل رقم المشروع.");
+      return;
+    }
+
+    const selected = document.querySelector('input[name="file_select"]:checked');
+    if (!selected) {
+      alert("فضلاً اختر ملفاً أولاً من القائمة.");
+      return;
+    }
+
+    const fileId = selected.value;
+    const url    = `${BACKEND_URL}/api/files/analyze`;
 
     const res = await fetch(url, {
       method: "POST",
@@ -547,71 +478,116 @@ async function sendMsg() {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + (token || "")
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ project_id: Number(pid), file_id: Number(fileId) })
     });
 
-    const data = await res.json().catch(() => null);
-
-    if (box) {
-      if (data && data.content) {
-        box.textContent =
-          `Status: ${res.status}\n` +
-          `URL: ${url}\n\n` +
-          `رسالة المساعد:\n${data.content}`;
-      } else {
-        box.textContent =
-          `Status: ${res.status}\nURL: ${url}\nResponse:\n` +
-          (JSON.stringify(data) || "—");
-      }
-    }
+    const text = await res.text();
 
     if (!res.ok) {
-      alert("فشل الإرسال");
+      let msg = "حدث خطأ أثناء تحليل الملف.";
+      if (res.status === 404) {
+        msg = "لم يتم العثور على الملف أو المشروع.";
+      } else if (res.status === 422) {
+        msg = "فضلاً تأكد من رقم المشروع والملف.";
+      }
+      if (out) out.textContent = msg;
+      alert(msg);
+      console.warn("Analyze error:", text);
+      return;
+    }
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { summary: text };
+    }
+
+    const summary = data.summary || text || "تم التحليل بنجاح.";
+    if (out) out.textContent = `نتيجة التحليل:\n${summary}`;
+  } catch (err) {
+    console.error(err);
+    if (out) out.textContent = "خطأ في الاتصال أثناء تحليل الملف.";
+    alert("خطأ في الاتصال أثناء تحليل الملف");
+  }
+}
+
+// =======================
+// دوال الدردشة
+// =======================
+async function sendMsg() {
+  try {
+    const pid  = document.getElementById("c_pid").value.trim() || null;
+    const text = document.getElementById("c_text").value.trim();
+
+    if (!text) {
+      alert("فضلاً اكتب رسالة أولاً.");
+      return;
+    }
+
+    const url = `${BACKEND_URL}/api/chat/send`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + (token || "")
+      },
+      body: JSON.stringify({ project_id: pid ? Number(pid) : null, content: text, session_id: sessionId })
+    });
+
+    const bodyText = await res.text();
+
+    if (res.ok) {
+      document.getElementById("c_text").value = "";
+      await loadHistory();
     } else {
-      loadHistory();
+      console.warn("Chat send error:", bodyText);
+      alert("فشل إرسال الرسالة");
     }
   } catch (err) {
     console.error(err);
-    if (box) box.textContent = "خطأ في إرسال الرسالة.";
     alert("خطأ في إرسال الرسالة");
   }
 }
 
 async function loadHistory() {
-  const box = document.getElementById("chat_box");
   try {
-    const pid  = document.getElementById("c_pid").value.trim();
-
-    let url = `${BACKEND_URL}/api/chat/history?session_id=${encodeURIComponent(sessionId)}`;
-    if (pid) {
-      url += `&project_id=${encodeURIComponent(pid)}`;
-    }
+    const box = document.getElementById("chat_box");
+    const url = `${BACKEND_URL}/api/chat/history?session_id=${encodeURIComponent(sessionId)}`;
 
     const res  = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
-    const data = await res.json().catch(() => null);
-
+    const text = await res.text();
     if (!res.ok) {
-      if (box) {
-        box.textContent =
-          `Status: ${res.status}\nURL: ${url}\nResponse:\n` +
-          (JSON.stringify(data) || "—");
-      }
+      if (box) box.textContent = "فشل في جلب سجل المحادثة.";
       return;
     }
 
-    if (Array.isArray(data) && box) {
-      const txt = data
-        .map((m) => `[${m.role}] ${m.content}`)
-        .join("\n\n----------------------\n\n");
-      box.textContent = txt || "لا يوجد سجل بعد.";
-    } else if (box) {
-      box.textContent = JSON.stringify(data) || "—";
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = [];
     }
+
+    if (!Array.isArray(data) || !data.length) {
+      box.textContent = "لا توجد رسائل بعد.";
+      return;
+    }
+
+    // تنسيق أبسط: كل رسالة في سطر مع اسم الدور بالعربي
+    const roleLabel = (r) =>
+      r === "assistant" ? "المساعد" : r === "user" ? "المستخدم" : r;
+
+    box.textContent = data
+      .map((m) => `${roleLabel(m.role)}: ${m.content}`)
+      .join("\n------------------------------\n");
   } catch (err) {
     console.error(err);
+    const box = document.getElementById("chat_box");
     if (box) box.textContent = "خطأ في جلب السجل.";
   }
 }
@@ -625,22 +601,22 @@ async function uploadAudio() {
       alert("لا يوجد تسجيل");
       return;
     }
-    const pid = document.getElementById("v_pid").value.trim();
+    const pid  = document.getElementById("v_pid").value.trim();
     const blob = new Blob(_chunks, { type: "audio/webm" });
-    const fd = new FormData();
+    const fd   = new FormData();
     fd.append("project_id", pid);
     fd.append("audio", blob, "voice.webm");
 
     const url = `${BACKEND_URL}/api/voice/upload`;
 
-    const res = await fetch(url, {
+    const res  = await fetch(url, {
       method: "POST",
       headers: { "Authorization": "Bearer " + (token || "") },
       body: fd
     });
 
     const text = await res.text();
-    const out = document.getElementById("voice_resp");
+    const out  = document.getElementById("voice_resp");
     if (out) out.textContent = text;
     _chunks = [];
   } catch (err) {
@@ -661,25 +637,25 @@ async function snap() {
       return;
     }
     const cv = document.getElementById("cv");
-    cv.width = v.videoWidth;
+    cv.width  = v.videoWidth;
     cv.height = v.videoHeight;
     cv.getContext("2d").drawImage(v, 0, 0);
 
     const blob = await new Promise((r) => cv.toBlob(r, "image/png"));
-    const fd = new FormData();
+    const fd   = new FormData();
     fd.append("project_id", document.getElementById("i_pid").value.trim());
     fd.append("image", blob, "snap.png");
 
     const url = `${BACKEND_URL}/api/vision/upload`;
 
-    const res = await fetch(url, {
+    const res  = await fetch(url, {
       method: "POST",
       headers: { "Authorization": "Bearer " + (token || "") },
       body: fd
     });
 
     const text = await res.text();
-    const out = document.getElementById("img_resp");
+    const out  = document.getElementById("img_resp");
     if (out) out.textContent = text;
   } catch (err) {
     console.error(err);
@@ -696,11 +672,6 @@ async function createPolicy() {
     const name  = document.getElementById("pol_name").value.trim();
     const rules = document.getElementById("pol_rules").value.trim() || "{}";
     const out   = document.getElementById("pol_out");
-
-    if (!token) {
-      alert("يجب تسجيل الدخول أولاً");
-      return;
-    }
 
     const url = `${BACKEND_URL}/api/governance/policies`;
 
@@ -725,15 +696,9 @@ async function createPolicy() {
 async function listPolicies() {
   try {
     const out = document.getElementById("pol_out");
-
-    if (!token) {
-      alert("يجب تسجيل الدخول أولاً");
-      return;
-    }
-
     const url = `${BACKEND_URL}/api/governance/policies`;
 
-    const res = await fetch(url, {
+    const res  = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
@@ -760,7 +725,7 @@ document.getElementById("nav-gov").onclick      = govView;
 // عرض صفحة الحساب افتراضياً
 authView();
 
-// فحص اتصال الباك إند
+// فحص اتصال الباك إند (للاختبار في الكونسول)
 fetch(`${BACKEND_URL}/api/health`)
   .then((r) => r.json())
   .then((d) => console.log("Backend Connected:", d))

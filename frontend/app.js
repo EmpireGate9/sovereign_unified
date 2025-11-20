@@ -3,7 +3,6 @@
 // =======================
 const BACKEND_URL = "https://sovereign-backend-rhel.onrender.com";
 
-// مسارات ثابتة
 const REGISTER_PATH  = "/api/auth/register";
 const LOGIN_PATH     = "/api/auth/login";
 const PROJECTS_PATH  = "/api/projects";
@@ -13,11 +12,7 @@ const VOICE_BASE     = "/api/voice";
 const VISION_BASE    = "/api/vision";
 const GOV_BASE       = "/api/governance";
 
-// التوكن + session
 let token = localStorage.getItem("token") || "";
-
-// نحفظ البريد لنعرضه للمستخدم
-let currentUserEmail = localStorage.getItem("user_email") || "";
 
 function ensureSessionId() {
   let s = localStorage.getItem("session_id");
@@ -54,30 +49,9 @@ function showInfo(msg) {
 // واجهة الحساب
 // =======================
 function authView() {
-  const loggedIn = !!token;
-  const email = currentUserEmail || localStorage.getItem("user_email") || "";
-
-  const statusHtml = loggedIn
-    ? `
-      <p class="small" style="margin-bottom:8px">
-        أنت مسجّل الدخول${email ? ` كـ <strong>${email}</strong>` : ""}.
-      </p>
-      <div class="actions" style="margin-bottom:16px">
-        <button onclick="logout()">تسجيل الخروج</button>
-      </div>
-    `
-    : `
-      <p class="small" style="margin-bottom:16px">
-        لم تقم بتسجيل الدخول بعد.
-      </p>
-    `;
-
   setView(`
     <section class="card">
       <h2 style="text-align:right;margin-bottom:24px">الحساب</h2>
-
-      ${statusHtml}
-
       <div class="row">
         <div class="col">
           <h3>تسجيل مستخدم جديد</h3>
@@ -99,16 +73,6 @@ function authView() {
       </div>
     </section>
   `);
-}
-
-// زر تسجيل الخروج
-function logout() {
-  token = "";
-  currentUserEmail = "";
-  localStorage.removeItem("token");
-  localStorage.removeItem("user_email");
-  showInfo("تم تسجيل الخروج");
-  authView();
 }
 
 // =======================
@@ -295,7 +259,7 @@ function govView() {
 }
 
 // =======================
-// حساب: تسجيل / دخول
+// تسجيل مستخدم
 // =======================
 async function register() {
   try {
@@ -311,7 +275,7 @@ async function register() {
 
     const text = await res.text();
     if (res.ok) {
-      showInfo("تم التسجيل بنجاح. يمكنك الآن تسجيل الدخول.");
+      showInfo("تم التسجيل بنجاح");
     } else {
       showError(text || "فشل التسجيل");
     }
@@ -321,6 +285,9 @@ async function register() {
   }
 }
 
+// =======================
+// تسجيل الدخول
+// =======================
 async function login() {
   try {
     const email = document.getElementById("l_email").value.trim();
@@ -336,11 +303,9 @@ async function login() {
 
     if (res.ok && data.access_token) {
       token = data.access_token;
-      currentUserEmail = email;
       localStorage.setItem("token", token);
-      localStorage.setItem("user_email", email);
       showInfo("تم تسجيل الدخول");
-      authView(); // لتحديث حالة الحساب وزر تسجيل الخروج
+      authView();
     } else {
       showError(data.detail || "فشل تسجيل الدخول");
     }
@@ -351,14 +316,13 @@ async function login() {
 }
 
 // =======================
-// مشاريع
+// إنشاء مشروع
 // =======================
 async function createProject() {
   const listBox = document.getElementById("projects_list");
   try {
     const name = document.getElementById("p_name").value.trim();
     const desc = document.getElementById("p_desc").value.trim();
-
     if (!name) {
       showError("فضلاً أدخل اسم المشروع");
       return;
@@ -378,28 +342,23 @@ async function createProject() {
 
     const text = await res.text();
 
-    if (listBox) {
-      listBox.innerHTML =
-        `<pre>Status: ${res.status}\nURL: ${url}\nRequest body: ${JSON.stringify(payload)}\nResponse:\n${text}</pre>`;
-    }
-
     if (res.ok) {
       showInfo("تم إنشاء المشروع");
       listProjects();
     } else if (res.status === 401) {
       showError("فضلاً سجّل الدخول أولاً");
-    } else if (res.status === 404) {
-      showError("المسار غير موجود على الخادم (404)");
     } else {
       showError("فشل إنشاء المشروع");
     }
   } catch (err) {
     console.error(err);
-    if (listBox) listBox.textContent = "خطأ في الاتصال بالخادم.";
-    showError("حدث خطأ أثناء إنشاء المشروع");
+    showError("خطأ في الاتصال بالخادم.");
   }
 }
 
+// =======================
+// جلب المشاريع
+// =======================
 async function listProjects() {
   const listBox = document.getElementById("projects_list");
   try {
@@ -425,11 +384,9 @@ async function listProjects() {
       listBox.innerHTML =
         "<ul>" +
         data
-          .map(
-            (p) =>
-              `<li>${p.id} — ${p.name}${p.description ? " (" + p.description + ")" : ""}</li>`
-          )
-          .join("") +
+          .map((p) => 
+            `<li>${p.id} — ${p.name}${p.description ? " (" + p.description + ")" : ""}</li>`
+          ).join("") +
         "</ul>";
     }
   } catch (err) {
@@ -439,7 +396,7 @@ async function listProjects() {
 }
 
 // =======================
-// ملفات
+// رفع ملف
 // =======================
 async function uploadFile() {
   try {
@@ -453,6 +410,7 @@ async function uploadFile() {
       showError("فضلاً أدخل رقم مشروع صحيح.");
       return;
     }
+
     if (!fileInput.files || !fileInput.files[0]) {
       showError("فضلاً اختر ملفاً للرفع.");
       return;
@@ -472,7 +430,7 @@ async function uploadFile() {
 
     const text = await res.text();
     if (res.ok) {
-      if (out) out.textContent = text;
+      if (out) out.textContent = "تم رفع الملف بنجاح";
       showInfo("تم رفع الملف بنجاح");
     } else if (res.status === 404 || res.status === 422) {
       if (out) out.textContent = "لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.";
@@ -483,11 +441,13 @@ async function uploadFile() {
     }
   } catch (err) {
     console.error(err);
-    const out = document.getElementById("file_resp");
-    if (out) out.textContent = "خطأ في رفع الملف.";
+    showError("خطأ في رفع الملف.");
   }
 }
 
+// =======================
+// عرض الملفات — النسخة الجديدة
+// =======================
 async function listFiles() {
   const out = document.getElementById("file_resp");
   try {
@@ -504,25 +464,46 @@ async function listFiles() {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
-    const text = await res.text();
+    if (!res.ok) {
+      if (res.status === 404 || res.status === 422) {
+        if (out) out.textContent = "لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.";
+        showError("لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.");
+      } else if (res.status === 401) {
+        if (out) out.textContent = "فضلاً سجّل الدخول أولاً.";
+        showError("فضلاً سجّل الدخول أولاً.");
+      } else {
+        const t = await res.text();
+        if (out) out.textContent = t || "فشل جلب الملفات.";
+        showError("فشل جلب الملفات.");
+      }
+      return;
+    }
 
-    if (res.ok) {
-      if (out) out.textContent = text || "لا توجد ملفات لهذا المشروع حتى الآن.";
-    } else if (res.status === 404 || res.status === 422) {
-      if (out) out.textContent = "لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.";
-      showError("لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.");
-    } else {
-      if (out) out.textContent = text;
-      showError("فشل جلب الملفات.");
+    const data = await res.json().catch(() => null);
+
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      if (out) out.textContent = "لا توجد ملفات لهذا المشروع حتى الآن.";
+      return;
+    }
+
+    const lines = data.map(f => {
+      const size = f.size_bytes != null ? `${f.size_bytes} بايت` : "";
+      const created = f.created_at ? ` — ${f.created_at}` : "";
+      return `#${f.id} — ${f.filename} (${size})${created}`;
+    });
+
+    if (out) {
+      out.textContent = lines.join("\n");
     }
   } catch (err) {
     console.error(err);
     if (out) out.textContent = "خطأ في جلب الملفات.";
+    showError("خطأ في جلب الملفات.");
   }
 }
 
 // =======================
-// دردشة
+// إرسال رسالة شات
 // =======================
 async function sendMsg() {
   try {
@@ -534,10 +515,6 @@ async function sendMsg() {
     }
 
     const project_id = pidRaw ? parseInt(pidRaw, 10) : null;
-    if (pidRaw && Number.isNaN(project_id)) {
-      showError("رقم المشروع غير صحيح.");
-      return;
-    }
 
     const url = BACKEND_URL + CHAT_BASE + "/send";
 
@@ -560,7 +537,6 @@ async function sendMsg() {
       return;
     }
 
-    // بعد التخزين في قاعدة البيانات نطلب الرد من الذكاء الاصطناعي
     const replyUrl = BACKEND_URL + CHAT_BASE + "/reply";
     const replyRes = await fetch(replyUrl, {
       method: "POST",
@@ -588,6 +564,9 @@ async function sendMsg() {
   }
 }
 
+// =======================
+// جلب سجل الشات
+// =======================
 async function loadHistory() {
   try {
     const pidRaw = document.getElementById("c_pid").value.trim();
@@ -617,12 +596,7 @@ async function loadHistory() {
     if (!Array.isArray(data) || !box) return;
 
     const lines = data.map((m) => {
-      const who =
-        m.role === "assistant"
-          ? "[المساعد]"
-          : m.role === "user"
-          ? "[أنت]"
-          : `[${m.role}]`;
+      const who = m.role === "assistant" ? "[المساعد]" : "[أنت]";
       return `${who} ${m.content}`;
     });
 
@@ -794,10 +768,8 @@ window.addEventListener("DOMContentLoaded", () => {
   if (navVision)   navVision.onclick   = visionView;
   if (navGov)      navGov.onclick      = govView;
 
-  // الصفحة الافتراضية
   authView();
 
-  // فحص اتصال الباك إند (للتتبع فقط في console)
   fetch(`${BACKEND_URL}/api/health`)
     .then((r) => r.json())
     .then((d) => console.log("Backend Connected:", d))

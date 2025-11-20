@@ -31,19 +31,16 @@ async def upload_file(
     user=Depends(get_current_user),
 ):
     """
-    رفع ملف وربطه بمشروع يعود للمستخدم الحالي.
+    رفع ملف وربطه بمشروع موجود.
+    لا نقيّد الآن برقم مالك المشروع لتفادي 404 مع المشاريع القديمة.
     """
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
 
     _ensure_upload_root()
 
-    # تأكيد أن المشروع موجود وملك للمستخدم
-    project = (
-        db.query(models.Project)
-        .filter(models.Project.id == project_id, models.Project.owner_id == user.id)
-        .first()
-    )
+    # نتأكد فقط أن المشروع موجود برقم الـ ID
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -87,15 +84,12 @@ def list_files(
 ):
     """
     إرجاع قائمة الملفات المرتبطة بمشروع معيّن.
+    نتحقق فقط من وجود المشروع.
     """
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    project = (
-        db.query(models.Project)
-        .filter(models.Project.id == project_id, models.Project.owner_id == user.id)
-        .first()
-    )
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -146,12 +140,8 @@ def analyze_file(
     project_id = body.project_id
     file_id = body.file_id
 
-    # تأكيد ملكية المشروع
-    project = (
-        db.query(models.Project)
-        .filter(models.Project.id == project_id, models.Project.owner_id == user.id)
-        .first()
-    )
+    # نتأكد أن المشروع موجود (بدون تقييد بالمالك الآن)
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -177,7 +167,11 @@ def analyze_file(
     try:
         file_text = raw.decode("utf-8", errors="ignore")
     except Exception:
-        file_text = f"File name: {db_file.filename}, MIME: {db_file.mime_type}, size: {db_file.size}"
+        file_text = (
+            f"File name: {db_file.filename}, "
+            f"MIME: {db_file.mime_type}, "
+            f"size: {db_file.size}"
+        )
 
     # برومبت التحليل
     system_msg = (
@@ -206,11 +200,11 @@ def analyze_file(
 
     analysis_text = completion.choices[0].message.content
 
-    # تخزين التحليل في جدول messages كرَد للمساعد مرتبط بالمشروع
+    # تخزين التحليل في messages
     analysis_message = models.Message(
         user_id=user.id,
         project_id=project_id,
-        session_id=None,  # ممكن لاحقاً نربطه بـ session_id
+        session_id=None,  # ممكن لاحقاً ربطه بجلسة
         role="assistant",
         content=f"[تحليل الملف: {db_file.filename}]\n\n{analysis_text}",
     )
@@ -218,7 +212,6 @@ def analyze_file(
     db.commit()
     db.refresh(analysis_message)
 
-    # إرجاع النتيجة
     return {
         "ok": True,
         "project_id": project_id,

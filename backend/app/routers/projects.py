@@ -4,9 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from .. import schemas, models
 from ..crud import projects as projects_crud
-from ..core.security import get_current_user  # ← هنا التحقق من التوكن الصحيح
+from app.core.security import get_current_user  # استخدام نفس دالة التحقق من التوكن
 
-# نستخدم prefix="/projects" فقط. الـ main.py يضيف "/api" فوقها
+# المسار النهائي سيكون /api/projects لأن main.py يضيف prefix="/api"
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
@@ -16,7 +16,9 @@ def create_project(
     db: AsyncSession = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
-    # هنا user مضمون أنه مسجّل دخول بتوكن صحيح
+    """
+    إنشاء مشروع جديد للمستخدم المسجّل (يجب أن يكون التوكن صحيحاً).
+    """
     pr = projects_crud.create_project(
         db,
         owner_id=user.id,
@@ -31,9 +33,15 @@ def list_projects(
     db: AsyncSession = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
-    # يرجع مشاريع المستخدم الحالي فقط
+    """
+    إرجاع قائمة مشاريع المستخدم الحالي فقط.
+    """
     lst = db.query(models.Project).filter(models.Project.owner_id == user.id).all()
     return [
-        {"id": p.id, "name": p.name, "description": p.description}
-        for p in lst
+      {
+        "id": p.id,
+        "name": p.name,
+        "description": p.description,
+      }
+      for p in lst
     ]

@@ -1,31 +1,64 @@
 from typing import List, Optional
 
-from datetime import datetime
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from openai import OpenAI
 
-from app import models, schemas
 from app.database import get_db
+from app import models, schemas
 
-# لا نضع /api هنا. الـ main.py يضيف /api و /chat
-router = APIRouter(tags=["chat"])
+router = APIRouter(prefix="/api/chat", tags=["chat"])
 
-# سيستخدم OPENAI_API_KEY من الـ env
+# عميل OpenAI (يستخدم OPENAI_API_KEY من متغيرات البيئة)
 client = OpenAI()
 
+# تعليمات النظام الخاصة بالمنصة
+SYSTEM_PROMPT = """
+أنت مساعد تحليلي داخل منصة «Sovereign / PAI-6 — لوحة سيادية».
 
+- المستخدم يعمل عادةً داخل مشروع له رقم (project_id)، ويمكنه رفع ملفات إلى هذا المشروع.
+- يوجد في المنصة تبويب للملفات يحتوي زر «تحليل ومعالجة» لكل ملف؛ هذا الزر يستدعي نماذج الذكاء الاصطناعي
+  لتحليل الملف وتخزين ملخص التحليل في قاعدة البيانات كسجل مرتبط بالمشروع/الجلسة.
+- أنت لا تقرأ الملفات الخام مباشرة، لكن يمكنك الاعتماد على:
+  • رسائل المستخدم السابقة في نفس الجلسة (session_id).
+  • أي ملخصات أو تحليلات موجودة كسجلات سابقة في نفس الجلسة/المشروع.
+
+عند أسئلة من نوع:
+  «حلل الملف في المشروع 1»، «ما هي نتيجة تحليل ملف المخططات؟» إلخ:
+  - إذا وجدت في السجل تحليلات أو أوصافاً للملفات، استخدمها وقدّم إجابة مرتبة،
+    وركّز على:
+      • ما الذي يصفه الملف؟
+      • أهم النقاط أو المشاكل أو المخاطر.
+      • توصيات عملية للمستخدم.
+  - إذا لم تجد أي تحليل في السجل:
+      • لا تقل أبداً أنك لا تستطيع الوصول للملفات أو المشاريع.
+      • بدلاً من ذلك، اشرح للمستخدم باختصار أن عليه:
+          1) رفع الملف في تبويب «الملفات» للمشروع المناسب.
+          2) الضغط على زر «تحليل ومعالجة».
+          3) ثم يمكنه سؤالك عن النتائج أو نسخ جزء من التحليل داخل الدردشة.
+      • حاول أن تعطيه أيضاً أفكاراً عن نوع التحليل المفيد لهذا النوع من الملفات
+        (مثلاً ملفات عقود، مخططات هندسية، تقارير مالية...).
+
+- أجب دائماً بالعربية الفصحى الواضحة، ويفضّل أن تقسّم الرد إلى فقرات أو نقاط.
+- تجنّب العبارات العامة من نوع: «لا يمكنني الوصول إلى ملفاتك» بدون أن تذكر للمستخدم
+  خطوات واضحة داخل النظام.
+"""
+
+
+# =========================
+# تخزين رسالة المستخدم فقط
+# =========================
 @router.post("/send", response_model=schemas.MessageOut)
 def send_message(
     message_in: schemas.MessageCreate,
     db: Session = Depends(get_db),
 ):
     """
-    تخزين رسالة المستخدم فقط (بدون استدعاء OpenAI).
-    يمكن استخدامه مستقبلاً لو أردت تخزين الرسائل يدوياً.
+    يخزن رسالة المستخدم في قاعدة البيانات.
+    (لا يستدعي الذكاء الاصطناعي هنا)
     """
-    user_id = 1  # مؤقتاً
+    # حالياً نثبّت user_id = 1، ويمكن لاحقاً ربطه بنظام الدخول الحقيقي
+    user_id = 1
 
     db_message = models.Message(
         user_id=user_id,
@@ -40,47 +73,45 @@ def send_message(
     return db_message
 
 
+# =========================
+# طلب رد من الذكاء الاصطناعي
+# =========================
 @router.post("/reply", response_model=schemas.MessageOut)
 def chat_reply(
     chat: schemas.ChatRequest,
     db: Session = Depends(get_db),
 ):
     """
-    استدعاء OpenAI بناءً على تاريخ الجلسة وتخزين:
-      - رسالة المستخدم الحالية
-      - رد المساعد
+    يبني محادثة من تاريخ الجلسة + تعليمات النظام، ثم يستدعي OpenAI
+    ويخزن رد المساعد في قاعدة البيانات.
     """
-    user_id = 1  # مؤقتاً حتى نربطه بنظام الدخول لاحقاً
+    user_id = 1  # مؤقتاً
 
     if not chat.session_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="session_id is required for chat",
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    # نجلب كل رسائل هذه الجلسة (ويمكن تضييقها على project_id إذا أُرسل)
+    q = db.query(models.Message).filter(
+        models.Message.session_id == chat.session_id
+    )
+    if chat.project_id is not None:
+        q = q.filter(models.Message.project_id == chat.project_id)
+
+    history: List[models.Message] = q.order_by(models.Message.id.asc()).all()
+
+    messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    # نضيف تاريخ الجلسة كما هو (roles: user / assistant / analysis ...)
+    for msg in history:
+        messages_payload.append(
+            {
+                "role": msg.role if msg.role in ("user", "assistant", "system") else "user",
+                "content": msg.content,
+            }
         )
 
-    # أولاً: خزن رسالة المستخدم الحالية في الـ DB
-    user_msg = models.Message(
-        user_id=user_id,
-        project_id=chat.project_id,
-        session_id=chat.session_id,
-        role="user",
-        content=chat.content,
-    )
-    db.add(user_msg)
-    db.commit()
-    db.refresh(user_msg)
-
-    # ثانياً: جلب كل تاريخ الجلسة (بعد إضافة الرسالة الحالية)
-    history: List[models.Message] = (
-        db.query(models.Message)
-        .filter(models.Message.session_id == chat.session_id)
-        .order_by(models.Message.id.asc())
-        .all()
-    )
-
-    messages_payload = [
-        {"role": msg.role, "content": msg.content} for msg in history
-    ]
+    # أخيراً نضيف طلب المستخدم الحالي
+    messages_payload.append({"role": "user", "content": chat.content})
 
     # استدعاء OpenAI
     try:
@@ -96,7 +127,7 @@ def chat_reply(
 
     assistant_reply = completion.choices[0].message.content
 
-    # ثالثاً: تخزين رد المساعد في قاعدة البيانات
+    # نخزن رد المساعد في قاعدة البيانات، ونربطه بالمشروع/الجلسة
     db_message = models.Message(
         user_id=user_id,
         project_id=chat.project_id,
@@ -107,27 +138,26 @@ def chat_reply(
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
+
     return db_message
 
 
+# =========================
+# إرجاع سجل الدردشة
+# =========================
 @router.get("/history", response_model=List[schemas.MessageOut])
-def chat_history(
-    session_id: Optional[str] = None,
-    project_id: Optional[int] = None,
+def get_history(
+    session_id: str = Query(..., description="معرّف الجلسة"),
+    project_id: Optional[int] = Query(None, description="اختياري: رقم المشروع"),
     db: Session = Depends(get_db),
 ):
     """
-    جلب تاريخ المحادثة:
-      - لو session_id موجود → رجّع رسائل هذه الجلسة
-      - لو لا → لو project_id موجود → رجّع رسائل هذا المشروع
+    يرجع كل الرسائل في هذه الجلسة (مع إمكانية تضييقها على مشروع معيّن).
+    يستخدمه الفرونت لعرض السجل في تبويب الدردشة.
     """
-    q = db.query(models.Message)
-
-    if session_id:
-        q = q.filter(models.Message.session_id == session_id)
-    elif project_id is not None:
+    q = db.query(models.Message).filter(models.Message.session_id == session_id)
+    if project_id is not None:
         q = q.filter(models.Message.project_id == project_id)
 
-    q = q.order_by(models.Message.id.asc())
-    msgs = q.all()
-    return msgs
+    messages = q.order_by(models.Message.id.asc()).all()
+    return messages

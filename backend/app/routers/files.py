@@ -6,11 +6,11 @@ import os
 
 from app.database import get_db
 from app import models
-from app.deps import get_current_user  # نفس دالة التحقق المستخدمة في المشاريع
+from app.deps import get_current_user  # نفس دالة المستخدم الحالي
 
-router = APIRouter(prefix="/api/files", tags=["files"])
+router = APIRouter(tags=["files"])  # لا نضع prefix هنا
 
-# مجلد تخزين الملفات داخل السيرفر
+# مجلد تخزين الملفات على السيرفر
 UPLOAD_ROOT = "uploaded_files"
 os.makedirs(UPLOAD_ROOT, exist_ok=True)
 
@@ -24,9 +24,8 @@ async def upload_file(
 ):
     """
     رفع ملف لمشروع معيّن.
-    - يطلب توكن صالح (get_current_user).
-    - يحاول حفظ الملف وإنشاء السجل مباشرة.
-    - في حال كان project_id غير موجود يفشل الحفظ ويرجع رسالة عربية.
+    يتأكد من التوكن (get_current_user) ثم يحفظ الملف ويربطه بالمشروع.
+    إذا كان رقم المشروع غير موجود يرجع رسالة عربية واضحة.
     """
 
     # حفظ الملف على القرص
@@ -50,9 +49,8 @@ async def upload_file(
         db.commit()
         db.refresh(db_file)
     except IntegrityError:
-        # فشل بسبب مفتاح أجنبي (لا يوجد مشروع بهذا الـ id)
+        # على الأغلب project_id لا يطابق أي مشروع (مفتاح أجنبي)
         db.rollback()
-        # حذف الملف من القرص بما أنه لن يُستخدم
         if os.path.exists(storage_path):
             os.remove(storage_path)
         raise HTTPException(
@@ -77,8 +75,7 @@ def list_files(
 ):
     """
     عرض ملفات مشروع معيّن.
-    - إذا لم توجد أي ملفات نرجع قائمة فارغة.
-    - لا نرمي خطأ عند رقم مشروع غير موجود، فقط ترجع [].
+    إذا لم توجد ملفات يرجع قائمة فارغة.
     """
 
     files = (
@@ -97,4 +94,4 @@ def list_files(
             "created_at": f.created_at.isoformat() if f.created_at else None,
         }
         for f in files
-        ]
+    ]

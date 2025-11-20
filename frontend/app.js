@@ -120,7 +120,9 @@ function filesView() {
         <button onclick="uploadFile()">رفع ملف</button>
         <button onclick="listFiles()">عرض الملفات</button>
       </div>
-      <pre id="file_resp" class="small" style="margin-top:16px">—</pre>
+      <pre id="file_resp"
+           class="small"
+           style="margin-top:16px;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;overflow-x:auto;">—</pre>
     </section>
   `);
 }
@@ -145,7 +147,9 @@ function chatView() {
         <button onclick="sendMsg()">إرسال</button>
         <button onclick="loadHistory()">تحديث السجل</button>
       </div>
-      <div id="chat_box" class="card small" style="margin-top:16px;white-space:pre-wrap">—</div>
+      <div id="chat_box"
+           class="card small"
+           style="margin-top:16px;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;overflow-x:auto;">—</div>
     </section>
   `);
 }
@@ -343,8 +347,6 @@ async function createProject() {
       body: JSON.stringify(payload)
     });
 
-    const text = await res.text();
-
     if (res.ok) {
       showInfo("تم إنشاء المشروع");
       listProjects();
@@ -492,13 +494,14 @@ async function listFiles() {
         const size = f.size_bytes != null ? `${f.size_bytes} بايت` : "";
         const created = f.created_at ? `<div class="small">${f.created_at}</div>` : "";
         return `
-          <div class="file-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <div>
+          <div class="file-row"
+               style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px">
+            <div style="flex:1 1 auto;min-width:0">
               <strong>#${f.id}</strong> — ${f.filename}
               ${size ? `(<span class="small">${size}</span>)` : ""}
               ${created}
             </div>
-            <div class="actions">
+            <div style="flex:0 0 auto">
               <button onclick="analyzeFile(${f.id})">تحليل ومعالجة</button>
             </div>
           </div>
@@ -534,7 +537,15 @@ async function analyzeFile(fileId) {
     const text = await res.text();
 
     if (res.ok) {
-      if (out) out.textContent = text || "تم تحليل الملف بنجاح.";
+      let display = text || "تم تحليل الملف بنجاح.";
+      // محاولة تنسيق JSON على عدة أسطر
+      try {
+        const obj = JSON.parse(text);
+        display = JSON.stringify(obj, null, 2);
+      } catch (_) {
+        // ليس JSON؛ نتركه كما هو
+      }
+      if (out) out.textContent = display;
       showInfo("تم تحليل الملف");
     } else if (res.status === 404) {
       if (out) out.textContent = "خدمة التحليل غير مفعّلة أو الملف غير موجود.";

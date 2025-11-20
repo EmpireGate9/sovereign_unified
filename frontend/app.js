@@ -226,7 +226,7 @@ async function login() {
       token = data.access_token;
       localStorage.setItem("token", token);
       alert("تم تسجيل الدخول");
-      authView(); // لتحديث عرض التوكن في الكرت
+      authView(); // لتحديث عرض التوكن في صفحة الحساب
     } else {
       alert(data.detail || "فشل تسجيل الدخول");
     }
@@ -245,8 +245,8 @@ async function createProject() {
     const name = document.getElementById("p_name").value.trim();
     const desc = document.getElementById("p_desc").value.trim();
 
-    // انتبه: الراوتر في الباك إند prefix="/api/projects" + prefix="/api" في main
-    const url = `${BACKEND_URL}/api/api/projects`;
+    // المسار النهائي في الباك إند هو /api/projects
+    const url = `${BACKEND_URL}/api/projects`;
     const payload = { name, description: desc };
 
     const res = await fetch(url, {
@@ -281,7 +281,7 @@ async function createProject() {
 async function listProjects() {
   const listBox = document.getElementById("projects_list");
   try {
-    const url = `${BACKEND_URL}/api/api/projects`;
+    const url = `${BACKEND_URL}/api/projects`;
 
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
@@ -517,7 +517,7 @@ async function listPolicies() {
 // =======================
 // ربط أزرار التنقل + تهيئة
 // =======================
-document.getElementById("nav-auth").onclick    = authView;
+document.getElementById("nav-auth").onclick     = authView;
 document.getElementById("nav-projects").onclick = projectsView;
 document.getElementById("nav-files").onclick    = filesView;
 document.getElementById("nav-chat").onclick     = chatView;

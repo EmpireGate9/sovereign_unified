@@ -75,12 +75,12 @@ function chatView() {
   <section class="card">
     <h3>الدردشة</h3>
     <div class="row">
-      <div class="col"><input id="c_pid" placeholder="Project ID (يمكن تركه فارغ للضيف)"/></div>
+      <div class="col"><input id="c_pid" placeholder="Project ID (اختياري)"/></div>
       <div class="col"><input id="c_text" placeholder="اكتب رسالة"/></div>
     </div>
     <div class="actions">
       <button onclick="sendMsg()">إرسال</button>
-      <button onclick="loadHistory()">تحديث</button>
+      <button onclick="loadHistory()">تحديث السجل</button>
     </div>
     <pre id="chat_box" class="small">—</pre>
   </section>
@@ -226,7 +226,7 @@ async function login() {
       token = data.access_token;
       localStorage.setItem("token", token);
       alert("تم تسجيل الدخول");
-      authView(); // لتحديث عرض التوكن في صفحة الحساب
+      authView(); // لتحديث عرض التوكن
     } else {
       alert(data.detail || "فشل تسجيل الدخول");
     }
@@ -245,7 +245,6 @@ async function createProject() {
     const name = document.getElementById("p_name").value.trim();
     const desc = document.getElementById("p_desc").value.trim();
 
-    // المسار النهائي في الباك إند هو /api/projects
     const url = `${BACKEND_URL}/api/projects`;
     const payload = { name, description: desc };
 
@@ -347,11 +346,13 @@ async function uploadFile() {
 // دوال الدردشة
 // =======================
 async function sendMsg() {
+  const box = document.getElementById("chat_box");
   try {
     const pid  = document.getElementById("c_pid").value.trim() || null;
     const text = document.getElementById("c_text").value.trim();
 
     const url = `${BACKEND_URL}/api/chat/send`;
+    const payload = { project_id: pid ? Number(pid) : null, content: text };
 
     const res = await fetch(url, {
       method: "POST",
@@ -359,26 +360,32 @@ async function sendMsg() {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + (token || "")
       },
-      body: JSON.stringify({ project_id: pid, content: text })
+      body: JSON.stringify(payload)
     });
+
+    const respText = await res.text();
+
+    if (box) {
+      box.textContent =
+        `Status: ${res.status}\nURL: ${url}\nRequest body: ${JSON.stringify(payload)}\nResponse:\n${respText}`;
+    }
 
     if (res.ok) {
       alert("تم الإرسال");
-      loadHistory();
     } else {
-      const t = await res.text();
-      alert(t || "فشل الإرسال");
+      alert("فشل الإرسال");
     }
   } catch (err) {
     console.error(err);
+    if (box) box.textContent = "خطأ في إرسال الرسالة.";
     alert("خطأ في إرسال الرسالة");
   }
 }
 
 async function loadHistory() {
+  const box = document.getElementById("chat_box");
   try {
     const pid  = document.getElementById("c_pid").value.trim();
-    const box  = document.getElementById("chat_box");
     const url  = `${BACKEND_URL}/api/chat/history` +
       (pid ? `?project_id=${encodeURIComponent(pid)}` : "");
 
@@ -386,11 +393,14 @@ async function loadHistory() {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
-    const text = await res.text();
-    if (box) box.textContent = text;
+    const respText = await res.text();
+
+    if (box) {
+      box.textContent =
+        `Status: ${res.status}\nURL: ${url}\nResponse:\n${respText}`;
+    }
   } catch (err) {
     console.error(err);
-    const box = document.getElementById("chat_box");
     if (box) box.textContent = "خطأ في جلب السجل.";
   }
 }
@@ -528,7 +538,7 @@ document.getElementById("nav-gov").onclick      = govView;
 // عرض صفحة الحساب افتراضياً
 authView();
 
-// فحص اتصال الباك إند
+// فحص اتصال الباك إند (للاختبار)
 fetch(`${BACKEND_URL}/api/health`)
   .then((r) => r.json())
   .then((d) => console.log("Backend Connected:", d))

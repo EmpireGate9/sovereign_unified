@@ -463,25 +463,41 @@ async function listFiles() {
       return;
     }
 
-    const url = `${BACKEND_URL + FILES_BASE}/list?project_id=${pid}`;
+    const url = `${BACKEND_URL}${FILES_BASE}/list?project_id=${pid}`;
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
     const text = await res.text();
 
-    if (res.ok) {
-      if (out) out.textContent = text || "لا توجد ملفات لهذا المشروع حتى الآن.";
-    } else if (res.status === 404 || res.status === 422) {
-      if (out) out.textContent = "لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.";
-      showError("لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.");
-    } else {
-      if (out) out.textContent = text;
+    if (!res.ok) {
+      if (out) out.textContent = text || "فشل جلب الملفات.";
       showError("فشل جلب الملفات.");
+      return;
     }
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = [];
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      if (out) out.textContent = "لا توجد ملفات لهذا المشروع.";
+      return;
+    }
+
+    const lines = data.map((f) => {
+      const size = f.size_bytes ?? f.size ?? 0;
+      return `• ${f.id} — ${f.filename} (${size} بايت)`;
+    });
+
+    if (out) out.textContent = lines.join("\n");
   } catch (err) {
     console.error(err);
     if (out) out.textContent = "خطأ في جلب الملفات.";
+    showError("خطأ في جلب الملفات.");
   }
 }
 
@@ -524,7 +540,6 @@ async function sendMsg() {
       return;
     }
 
-    // بعد التخزين في قاعدة البيانات نطلب الرد من الذكاء الاصطناعي
     const replyUrl = BACKEND_URL + CHAT_BASE + "/reply";
     const replyRes = await fetch(replyUrl, {
       method: "POST",
@@ -541,7 +556,7 @@ async function sendMsg() {
 
     const replyText = await replyRes.text();
     if (!replyRes.ok) {
-      showError(replyText || "فشل الحصول على رد الذكاء الاصطناعي");
+      showError(replyText || "فشل الحصول على رد التحليل");
       return;
     }
 

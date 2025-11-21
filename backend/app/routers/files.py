@@ -1,30 +1,55 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
-from sqlalchemy.orm import Session
+from pathlib import Path
 from typing import List
-import os
-from uuid import uuid4
 
-from openai import OpenAI
-from pydantic import BaseModel
+from fastapi import (
+    APIRouter,
+    Depends,
+    UploadFile,
+    File,
+    Form,
+    HTTPException,
+)
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app import models
 from app.deps import get_current_user
 
-# لا نضع أي prefix هنا، لأن main.py يضيف "/files" بالفعل
-router = APIRouter(tags=["files"])
+from openai import OpenAI
 
+# ============= إعدادات عامة =============
+router = APIRouter()
 client = OpenAI()
-UPLOAD_ROOT = "uploads"
+
+# مجلد تخزين الملفات على السيرفر
+UPLOAD_ROOT = Path("data/uploads")
+UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 
-def _ensure_upload_root() -> None:
-    os.makedirs(UPLOAD_ROOT, exist_ok=True)
+# ============= دوال مساعدة داخلية =============
+def _ensure_user_project(
+    db: Session,
+    user_id: int,
+    project_id: int,
+) -> models.Project:
+    """التأكد أن المشروع موجود ويتبع لهذا المستخدم."""
+    project = (
+        db.query(models.Project)
+        .filter(
+            models.Project.id == project_id,
+            models.Project.owner_id == user_id,
+        )
+        .first()
+    )
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found for this user",
+        )
+    return project
 
 
-# =========================
-# 1) رفع ملف وربطه بمشروع
-# =========================
+# ============= رفع ملف =============
 @router.post("/upload")
 async def upload_file(
     project_id: int = Form(...),
@@ -33,29 +58,31 @@ async def upload_file(
     user=Depends(get_current_user),
 ):
     """
-    رفع ملف وربطه برقم مشروع معيّن.
-    لا نتحقق من وجود المشروع في جدول projects لتفادي أخطاء 404.
+    رفع ملف واحد وربطه بمشروع.
     """
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
+    # تأكد أن المشروع فعلاً يخص هذا المستخدم
+    _ensure_user_project(db, user.id, project_id)
 
-    _ensure_upload_root()
+    # مجلد المشروع
+    project_dir = UPLOAD_ROOT / f"project_{project_id}"
+    project_dir.mkdir(parents=True, exist_ok=True)
 
-    safe_name = f"{uuid4().hex}_{file.filename}"
-    disk_path = os.path.join(UPLOAD_ROOT, safe_name)
+    # مسار التخزين الفعلي على السيرفر
+    storage_path = project_dir / file.filename
 
-    contents = await file.read()
-    with open(disk_path, "wb") as f:
-        f.write(contents)
+    # حفظ الملف على القرص
+    data = await file.read()
+    size_bytes = len(data)
+    with open(storage_path, "wb") as f:
+        f.write(data)
 
-    size_bytes = len(contents)
-
+    # إنشاء سجل في جدول الملفات
     db_file = models.File(
         project_id=project_id,
         filename=file.filename,
         mime_type=file.content_type or "application/octet-stream",
         size=size_bytes,
-        storage_path=disk_path,
+        storage_path=str(storage_path),
     )
     db.add(db_file)
     db.commit()
@@ -70,9 +97,7 @@ async def upload_file(
     }
 
 
-# =========================
-# 2) عرض ملفات مشروع معيّن
-# =========================
+# ============= عرض ملفات مشروع =============
 @router.get("/list")
 def list_files(
     project_id: int,
@@ -80,15 +105,14 @@ def list_files(
     user=Depends(get_current_user),
 ):
     """
-    إرجاع قائمة الملفات المرتبطة برقم project_id معيّن.
+    إرجاع قائمة ملفات مشروع معيّن.
     """
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
+    _ensure_user_project(db, user.id, project_id)
 
     files: List[models.File] = (
         db.query(models.File)
         .filter(models.File.project_id == project_id)
-        .order_by(models.File.created_at.desc())
+        .order_by(models.File.created_at.asc())
         .all()
     )
 
@@ -98,112 +122,100 @@ def list_files(
             "filename": f.filename,
             "mime_type": f.mime_type,
             "size_bytes": f.size,
-            "created_at": f.created_at,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
         }
         for f in files
     ]
 
 
-# =========================
-# 3) نموذج طلب التحليل
-# =========================
-class AnalyzeInput(BaseModel):
-    project_id: int
-    file_id: int
-
-
-# =========================
-# 4) تحليل ومعالجة ملف
-# =========================
+# ============= تحليل ومعالجة ملف =============
 @router.post("/analyze")
 def analyze_file(
-    body: AnalyzeInput,
+    file_id: int = Form(...),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
     """
-    تحليل ملف باستخدام OpenAI وتخزين النتيجة في جدول messages
-    كرسالة (assistant) مرتبطة بالمشروع.
+    تحليل ملف واحد بالذكاء الاصطناعي وتخزين النتيجة في جدول messages
+    ثم إرجاع ملخص التحليل.
     """
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
 
-    # العثور على الملف مع التحقق من أنه تابع لنفس المشروع
+    # 1) التأكد من أن الملف موجود ويتبع لمشروع لهذا المستخدم
     db_file = (
         db.query(models.File)
+        .join(models.Project, models.Project.id == models.File.project_id)
         .filter(
-            models.File.id == body.file_id,
-            models.File.project_id == body.project_id,
+            models.File.id == file_id,
+            models.Project.owner_id == user.id,
         )
         .first()
     )
+
     if not db_file:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    project_id = db_file.project_id
-
-    # قراءة محتوى الملف من التخزين
-    try:
-        with open(db_file.storage_path, "rb") as f:
-            raw = f.read()
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to read stored file")
-
-    try:
-        file_text = raw.decode("utf-8", errors="ignore")
-    except Exception:
-        file_text = (
-            f"File name: {db_file.filename}, "
-            f"MIME: {db_file.mime_type}, "
-            f"size: {db_file.size}"
+        raise HTTPException(
+            status_code=404,
+            detail="File not found for this user",
         )
 
-    # برومبت التحليل
-    system_msg = (
-        "أنت مساعد تحليلي داخل منصة إدارة مشاريع. "
-        "المطلوب: تحليل محتوى الملف التالي وإرجاع ملخص منظم يشمل: "
-        "1) وصف عام، 2) النقاط المهمة، 3) الأرقام أو الكميات البارزة إن وجدت، "
-        "4) المخاطر أو الملاحظات، 5) توصيات عملية قصيرة."
+    # 2) محاولة قراءة محتوى الملف كنص
+    try:
+        with open(db_file.storage_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+    except Exception:
+        content = ""
+
+    # 3) بناء برومبت التحليل
+    prompt = (
+        f"اسم الملف: {db_file.filename}\n"
+        f"نوع الملف: {db_file.mime_type}\n\n"
+        "حلّل هذا الملف كجزء من مشروع (مقاولات / هندسة / تجاري / طبي / ...).\n"
+        "أعطني ملخصاً منظماً بالعربية يتضمن:\n"
+        "• وصفاً عاماً لما يحتويه الملف.\n"
+        "• أهم النقاط أو البنود أو البيانات.\n"
+        "• المخاطر أو الملاحظات التي يجب الانتباه لها.\n"
+        "• توصيات عملية يمكن لصاحب المشروع الاستفادة منها.\n"
+        "إذا كان النص غير واضح أو الملف ليس نصياً، قدّم تحليلاً تقريبياً بناءً على ما هو متاح."
     )
 
-    messages_payload = [
-        {"role": "system", "content": system_msg},
+    messages = [
+        {
+            "role": "system",
+            "content": "أجب بالعربية الفصحى في نقاط مرتبة وسهلة القراءة.",
+        },
         {
             "role": "user",
-            "content": (
-                f"هذا محتوى الملف المرتبط بالمشروع رقم {project_id}:\n\n"
-                f"{file_text[:12000]}"
-            ),
+            "content": prompt + "\n\nنص الملف (قد يكون مقطوعاً):\n" + content[:4000],
         },
     ]
 
-    # استدعاء OpenAI
+    # 4) استدعاء OpenAI
     try:
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=messages_payload,
+            messages=messages,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"OpenAI error: {exc}")
 
     analysis_text = completion.choices[0].message.content
 
-    # تخزين التحليل في messages
+    # 5) تخزين نتيجة التحليل كرسالة مرتبطة بالمشروع
     analysis_message = models.Message(
         user_id=user.id,
-        project_id=project_id,
+        project_id=db_file.project_id,
         session_id=None,
         role="assistant",
-        content=f"[تحليل الملف: {db_file.filename}]\n\n{analysis_text}",
+        content=f"تحليل الملف «{db_file.filename}»:\n\n{analysis_text}",
     )
     db.add(analysis_message)
     db.commit()
     db.refresh(analysis_message)
 
+    # 6) إرجاع استجابة واضحة للواجهة
     return {
         "ok": True,
-        "project_id": project_id,
         "file_id": db_file.id,
+        "project_id": db_file.project_id,
         "analysis_message_id": analysis_message.id,
         "analysis": analysis_text,
     }

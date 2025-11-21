@@ -1,6 +1,7 @@
-// =======================
-// إعدادات عامة
-// =======================
+/* ===========================
+   إعدادات عامة
+=========================== */
+
 const BACKEND_URL = "https://sovereign-backend-rhel.onrender.com";
 
 // مسارات ثابتة
@@ -9,12 +10,12 @@ const LOGIN_PATH     = "/api/auth/login";
 const PROJECTS_PATH  = "/api/projects";
 const FILES_BASE     = "/api/files";
 const CHAT_BASE      = "/api/chat";
-const VOICE_BASE     = "/api/voice";
-const VISION_BASE    = "/api/vision";
-const GOV_BASE       = "/api/governance";
+const ANALYSIS_BASE  = "/api/analysis";
 
-// التوكن + session
-let token = localStorage.getItem("token") || "";
+// التوكن + بيانات المستخدم + session
+let token     = localStorage.getItem("token") || "";
+let userName  = localStorage.getItem("user_name") || "";
+let userEmail = localStorage.getItem("user_email") || "";
 
 function ensureSessionId() {
   let s = localStorage.getItem("session_id");
@@ -28,32 +29,71 @@ function ensureSessionId() {
   }
   return s;
 }
+
 const SESSION_ID = ensureSessionId();
 
-// آخر ملفات تم جلبها من السيرفر (لكي نعرف file_id للتحليل)
-window._lastFiles = [];
+/* ===========================
+   دوال عامة
+=========================== */
 
-// =======================
-// دوال مساعدة
-// =======================
 function setView(html) {
   const root = document.getElementById("view");
-  if (!root) return;
-  root.innerHTML = html;
+  if (root) root.innerHTML = html;
 }
 
 function showError(msg) {
-  alert(msg || "حدث خطأ غير متوقع");
+  alert(msg || "خطأ غير متوقع");
 }
 
 function showInfo(msg) {
   alert(msg);
 }
 
-// =======================
-// واجهة الحساب
-// =======================
+/* زر تسجيل الخروج في الشريط العلوي */
+function updateLogoutButton() {
+  const navLogout = document.getElementById("nav-logout");
+  if (!navLogout) return;
+  navLogout.style.display = token ? "inline-block" : "none";
+}
+
+function logout() {
+  token = "";
+  localStorage.removeItem("token");
+  // نترك session_id كما هو للدردشة
+  showInfo("تم تسجيل الخروج");
+  authView();
+  updateLogoutButton();
+}
+
+/* ===========================
+   واجهة الحساب
+=========================== */
+
+function renderLoggedInAccount() {
+  const displayName =
+    userName ||
+    userEmail ||
+    "مستخدم";
+  setView(`
+    <section class="card">
+      <h2 style="text-align:right;margin-bottom:16px">الحساب</h2>
+      <p style="margin-bottom:8px;text-align:right">
+        تم تسجيل الدخول كـ <strong>${displayName}</strong>
+      </p>
+      <p class="small" style="opacity:0.8;text-align:right">
+        يمكنك الآن إدارة مشاريعك وملفاتك والدردشة من خلال الأيقونات في الأعلى.
+      </p>
+    </section>
+  `);
+}
+
 function authView() {
+  if (token) {
+    // مستخدم مسجل الدخول بالفعل
+    renderLoggedInAccount();
+    return;
+  }
+
   setView(`
     <section class="card">
       <h2 style="text-align:right;margin-bottom:24px">الحساب</h2>
@@ -80,198 +120,80 @@ function authView() {
   `);
 }
 
-// =======================
-// واجهة المشاريع
-// =======================
+/* ===========================
+   واجهة المشاريع
+=========================== */
+
 function projectsView() {
   setView(`
     <section class="card">
       <h2 style="text-align:right;margin-bottom:24px">المشاريع</h2>
       <div class="row">
-        <div class="col">
-          <input id="p_name" placeholder="اسم المشروع" />
-        </div>
-        <div class="col">
-          <input id="p_desc" placeholder="وصف المشروع" />
-        </div>
+        <div class="col"><input id="p_name" placeholder="اسم المشروع" /></div>
+        <div class="col"><input id="p_desc" placeholder="وصف المشروع" /></div>
       </div>
       <div class="actions" style="margin-top:16px">
-        <button onclick="createProject()">إنشاء مشروع</button>
+        <button onclick="createProject()">إنشاء</button>
         <button onclick="listProjects()">تحديث القائمة</button>
       </div>
+
       <div id="projects_list" class="card small" style="margin-top:16px">—</div>
     </section>
   `);
 }
 
-// =======================
-// واجهة الملفات
-// =======================
+/* ===========================
+   واجهة الملفات
+=========================== */
+
 function filesView() {
   setView(`
     <section class="card">
       <h2 style="text-align:right;margin-bottom:24px">الملفات</h2>
       <div class="row">
-        <div class="col">
-          <input id="f_pid" placeholder="رقم المشروع (ID)" />
-        </div>
-        <div class="col">
-          <input id="file_input" type="file" />
-        </div>
+        <div class="col"><input id="f_pid" placeholder="رقم المشروع" /></div>
+        <div class="col"><input id="file_input" type="file" /></div>
       </div>
       <div class="actions" style="margin-top:16px">
         <button onclick="uploadFile()">رفع ملف</button>
         <button onclick="listFiles()">عرض الملفات</button>
         <button onclick="analyzeFile()">تحليل ومعالجة</button>
       </div>
-      <pre id="file_resp"
-           class="small"
-           style="margin-top:16px;white-space:pre-wrap;word-break:break-word">—</pre>
+
+      <pre id="file_resp" class="small" style="margin-top:16px">—</pre>
     </section>
   `);
 }
 
-// =======================
-// واجهة الدردشة
-// =======================
+/* ===========================
+   واجهة الدردشة
+=========================== */
+
 function chatView() {
   setView(`
     <section class="card">
       <h2 style="text-align:right;margin-bottom:24px">الدردشة</h2>
       <div class="row">
-        <div class="col">
-          <input id="c_pid" placeholder="رقم المشروع (يمكن تركه فارغ)" />
-        </div>
-        <div class="col">
-          <input id="c_text" placeholder="اكتب رسالتك هنا" />
-        </div>
+        <div class="col"><input id="c_pid" placeholder="رقم المشروع (اختياري)" /></div>
+        <div class="col"><input id="c_text" placeholder="اكتب رسالتك" /></div>
       </div>
+
       <p class="small" style="margin-top:8px">Session ID: ${SESSION_ID}</p>
-      <div class="actions" style="margin-top:8px">
+
+      <div class="actions">
         <button onclick="sendMsg()">إرسال</button>
         <button onclick="loadHistory()">تحديث السجل</button>
       </div>
-      <div id="chat_box"
-           class="card small"
-           style="margin-top:16px;white-space:pre-wrap;word-break:break-word">—</div>
+
+      <div id="chat_box" class="card small" style="margin-top:16px;white-space:pre-wrap">—</div>
     </section>
   `);
 }
 
-// =======================
-// واجهة الصوت
-// =======================
-function voiceView() {
-  setView(`
-    <section class="card">
-      <h2 style="text-align:right;margin-bottom:24px">الصوت (تجريبي)</h2>
-      <div class="row">
-        <div class="col">
-          <input id="v_pid" placeholder="رقم المشروع (اختياري)" />
-        </div>
-      </div>
-      <div class="actions" style="margin-top:16px">
-        <button id="rec_btn">بدء التسجيل</button>
-        <button onclick="uploadAudio()">رفع المقطع</button>
-      </div>
-      <p class="small">يحتاج المتصفح دعم MediaRecorder.</p>
-      <pre id="voice_resp" class="small" style="margin-top:16px">—</pre>
-    </section>
-  `);
+/* ===========================
+   تسجيل مستخدم جديد
+=========================== */
 
-  window._chunks = [];
-  let mediaRecorder = null;
-  const btn = document.getElementById("rec_btn");
-
-  if (btn) {
-    btn.onclick = async () => {
-      try {
-        if (!mediaRecorder) {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
-          mediaRecorder.ondataavailable = (e) => _chunks.push(e.data);
-          mediaRecorder.start();
-          btn.textContent = "إيقاف التسجيل";
-        } else {
-          mediaRecorder.stop();
-          mediaRecorder = null;
-          btn.textContent = "بدء التسجيل";
-        }
-      } catch (err) {
-        console.error(err);
-        showError("حدث خطأ في الميكروفون");
-      }
-    };
-  }
-}
-
-// =======================
-// واجهة الكاميرا
-// =======================
-function visionView() {
-  setView(`
-    <section class="card">
-      <h2 style="text-align:right;margin-bottom:24px">الكاميرا (تجريبي)</h2>
-      <div class="row">
-        <div class="col">
-          <input id="i_pid" placeholder="رقم المشروع (اختياري)" />
-        </div>
-      </div>
-      <video id="vid" autoplay playsinline
-             style="max-width:100%;border-radius:12px;border:1px solid #333;margin-top:12px"></video>
-      <div class="actions" style="margin-top:16px">
-        <button id="cam_btn">تشغيل / إيقاف</button>
-        <button onclick="snap()">التقاط & رفع</button>
-      </div>
-      <canvas id="cv" style="display:none"></canvas>
-      <pre id="img_resp" class="small" style="margin-top:16px">—</pre>
-    </section>
-  `);
-
-  let stream = null;
-  const v = document.getElementById("vid");
-  const btn = document.getElementById("cam_btn");
-
-  if (btn) {
-    btn.onclick = async () => {
-      try {
-        if (!stream) {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          v.srcObject = stream;
-        } else {
-          stream.getTracks().forEach((t) => t.stop());
-          stream = null;
-          v.srcObject = null;
-        }
-      } catch (err) {
-        console.error(err);
-        showError("حدث خطأ في الكاميرا");
-      }
-    };
-  }
-}
-
-// =======================
-// واجهة الحوكمة
-// =======================
-function govView() {
-  setView(`
-    <section class="card">
-      <h2 style="text-align:right;margin-bottom:24px">الحوكمة</h2>
-      <input id="pol_name" placeholder="اسم السياسة" />
-      <textarea id="pol_rules" placeholder='{"allow":["admin"],"deny":["*"]}'></textarea>
-      <div class="actions" style="margin-top:16px">
-        <button onclick="createPolicy()">إنشاء سياسة</button>
-        <button onclick="listPolicies()">عرض السياسات</button>
-      </div>
-      <pre id="pol_out" class="small" style="margin-top:16px">—</pre>
-    </section>
-  `);
-}
-
-// =======================
-// حساب: تسجيل / دخول
-// =======================
 async function register() {
   try {
     const email = document.getElementById("r_email").value.trim();
@@ -285,16 +207,27 @@ async function register() {
     });
 
     const text = await res.text();
+
     if (res.ok) {
+      // نحفظ الاسم والإيميل محلياً لعرضه بعد تسجيل الدخول
+      userName  = name;
+      userEmail = email;
+      localStorage.setItem("user_name", userName);
+      localStorage.setItem("user_email", userEmail);
       showInfo("تم التسجيل بنجاح");
     } else {
       showError(text || "فشل التسجيل");
     }
+
   } catch (err) {
     console.error(err);
-    showError("فشل التسجيل (خطأ اتصال)");
+    showError("فشل التسجيل");
   }
 }
+
+/* ===========================
+   تسجيل الدخول
+=========================== */
 
 async function login() {
   try {
@@ -312,33 +245,39 @@ async function login() {
     if (res.ok && data.access_token) {
       token = data.access_token;
       localStorage.setItem("token", token);
+
+      // نخزن الإيميل لاستخدامه لاحقاً في عرض الاسم إن لم يتوفر الاسم
+      if (email) {
+        userEmail = email;
+        localStorage.setItem("user_email", userEmail);
+      }
+
       showInfo("تم تسجيل الدخول");
-      authView();
+      updateLogoutButton();
+      authView(); // يبقى في صفحة الحساب لكن بحالة "مسجل الدخول"
+
     } else {
       showError(data.detail || "فشل تسجيل الدخول");
     }
+
   } catch (err) {
     console.error(err);
-    showError("فشل تسجيل الدخول (خطأ اتصال)");
+    showError("فشل تسجيل الدخول");
   }
 }
 
-// =======================
-// مشاريع
-// =======================
+/* ===========================
+   إنشاء مشروع
+=========================== */
+
 async function createProject() {
-  const listBox = document.getElementById("projects_list");
+  const box = document.getElementById("projects_list");
+
   try {
     const name = document.getElementById("p_name").value.trim();
     const desc = document.getElementById("p_desc").value.trim();
 
-    if (!name) {
-      showError("فضلاً أدخل اسم المشروع");
-      return;
-    }
-
     const url = BACKEND_URL + PROJECTS_PATH;
-    const payload = { name, description: desc };
 
     const res = await fetch(url, {
       method: "POST",
@@ -346,94 +285,69 @@ async function createProject() {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + (token || "")
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ name, description: desc })
     });
 
     const text = await res.text();
 
-    if (listBox) {
-      listBox.innerHTML =
-        `<pre>Status: ${res.status}\nURL: ${url}\nRequest body: ${JSON.stringify(payload)}\nResponse:\n${text}</pre>`;
-    }
+    box.innerHTML = `<pre>Status: ${res.status}\n${text}</pre>`;
 
     if (res.ok) {
-      showInfo("تم إنشاء المشروع");
       listProjects();
-    } else if (res.status === 401) {
-      showError("فضلاً سجّل الدخول أولاً");
-    } else if (res.status === 404) {
-      showError("المسار غير موجود على الخادم (404)");
     } else {
       showError("فشل إنشاء المشروع");
     }
+
   } catch (err) {
     console.error(err);
-    if (listBox) listBox.textContent = "خطأ في الاتصال بالخادم.";
-    showError("حدث خطأ أثناء إنشاء المشروع");
+    showError("خطأ في إنشاء المشروع");
+    if (box) box.textContent = "خطأ في الاتصال بالخادم.";
   }
 }
 
+/* ===========================
+   قائمة المشاريع
+=========================== */
+
 async function listProjects() {
-  const listBox = document.getElementById("projects_list");
+  const box = document.getElementById("projects_list");
   try {
     const url = BACKEND_URL + PROJECTS_PATH;
-
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
     if (!res.ok) {
-      if (res.status === 401) {
-        showError("فضلاً سجّل الدخول أولاً");
-      }
-      if (listBox) {
-        listBox.textContent = `Status: ${res.status} - فشل جلب المشاريع`;
-      }
+      box.textContent = "فشل جلب المشاريع";
       return;
     }
 
     const data = await res.json().catch(() => []);
+    box.innerHTML =
+      "<ul>" +
+      data.map(p => `<li>${p.id} — ${p.name}</li>`).join("") +
+      "</ul>";
 
-    if (Array.isArray(data) && listBox) {
-      listBox.innerHTML =
-        "<ul>" +
-        data
-          .map(
-            (p) =>
-              `<li>${p.id} — ${p.name}${p.description ? " (" + p.description + ")" : ""}</li>`
-          )
-          .join("") +
-        "</ul>";
-    }
   } catch (err) {
     console.error(err);
-    if (listBox) listBox.textContent = "خطأ في الاتصال أثناء جلب المشاريع.";
+    box.textContent = "خطأ في جلب المشاريع";
   }
 }
 
-// =======================
-// ملفات
-// =======================
-async function uploadFile() {
-  try {
-    const pidInput  = document.getElementById("f_pid");
-    const fileInput = document.getElementById("file_input");
-    const out       = document.getElementById("file_resp");
+/* ===========================
+   رفع ملف
+=========================== */
 
-    const pid = parseInt(pidInput.value.trim(), 10);
-    if (Number.isNaN(pid)) {
-      if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
-      showError("فضلاً أدخل رقم مشروع صحيح.");
-      return;
-    }
-    if (!fileInput.files || !fileInput.files[0]) {
-      showError("فضلاً اختر ملفاً للرفع.");
-      return;
-    }
+async function uploadFile() {
+  const out = document.getElementById("file_resp");
+
+  try {
+    const pid = parseInt(document.getElementById("f_pid").value.trim(), 10);
+    const f   = document.getElementById("file_input").files[0];
 
     const fd = new FormData();
     fd.append("project_id", pid);
-    fd.append("file", fileInput.files[0]);
+    fd.append("file", f);
 
     const url = BACKEND_URL + FILES_BASE + "/upload";
 
@@ -444,164 +358,86 @@ async function uploadFile() {
     });
 
     const text = await res.text();
-    if (res.ok) {
-      if (out) out.textContent = text;
-      showInfo("تم رفع الملف بنجاح");
-    } else if (res.status === 404 || res.status === 422) {
-      if (out) out.textContent = "لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.";
-      showError("لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.");
-    } else {
-      if (out) out.textContent = text;
-      showError("فشل رفع الملف");
-    }
+    out.textContent = text;
+
   } catch (err) {
     console.error(err);
-    const out = document.getElementById("file_resp");
-    if (out) out.textContent = "خطأ في رفع الملف.";
+    out.textContent = "خطأ";
   }
 }
+
+/* ===========================
+   عرض الملفات
+=========================== */
 
 async function listFiles() {
   const out = document.getElementById("file_resp");
   try {
-    const pidRaw = document.getElementById("f_pid").value.trim();
-    const pid = parseInt(pidRaw, 10);
-    if (Number.isNaN(pid)) {
-      if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
-      showError("فضلاً أدخل رقم مشروع صحيح.");
-      return;
-    }
-
+    const pid = document.getElementById("f_pid").value.trim();
     const url = `${BACKEND_URL + FILES_BASE}/list?project_id=${pid}`;
-    const res = await fetch(url, {
-      headers: { "Authorization": "Bearer " + (token || "") }
-    });
 
+    const res = await fetch(url);
     const text = await res.text();
+    out.textContent = text;
 
-    if (res.ok) {
-      // نحاول حفظ القائمة في الذاكرة لاستخدامها في التحليل
-      try {
-        const data = JSON.parse(text);
-        if (Array.isArray(data)) {
-          window._lastFiles = data;
-        }
-      } catch {
-        // إذا لم يكن JSON صحيح نتركه كما هو
-      }
-      if (out) out.textContent = text || "لا توجد ملفات لهذا المشروع حتى الآن.";
-    } else if (res.status === 404 || res.status === 422) {
-      if (out) out.textContent = "لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.";
-      showError("لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.");
-    } else {
-      if (out) out.textContent = text;
-      showError("فشل جلب الملفات.");
-    }
   } catch (err) {
     console.error(err);
-    if (out) out.textContent = "خطأ في جلب الملفات.";
+    out.textContent = "خطأ في جلب الملفات";
   }
 }
 
-// =======================
-// تحليل ومعالجة ملف
-// =======================
+/* ===========================
+   تحليل ملف
+=========================== */
+
 async function analyzeFile() {
   const out = document.getElementById("file_resp");
-
   try {
-    // رقم المشروع
-    const pidRaw = document.getElementById("f_pid").value.trim();
-    const project_id = parseInt(pidRaw, 10);
-    if (Number.isNaN(project_id)) {
-      if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
-      showError("فضلاً أدخل رقم مشروع صحيح.");
+    const pid = parseInt(document.getElementById("f_pid").value.trim(), 10);
+
+    const listUrl = `${BACKEND_URL + FILES_BASE}/list?project_id=${pid}`;
+    const listRes = await fetch(listUrl);
+    const listData = await listRes.json();
+
+    if (!Array.isArray(listData) || !listData.length) {
+      showError("لا يوجد ملفات");
       return;
     }
 
-    let file_id = null;
+    const file_id = listData[0].id;
 
-    // نحاول أخذ أول ملف من آخر قائمة
-    if (window._lastFiles && Array.isArray(window._lastFiles) && window._lastFiles.length > 0) {
-      file_id = window._lastFiles[0].id;
-    }
-
-    // إذا لا توجد قائمة، نجلبها الآن
-    if (!file_id) {
-      const listUrl = `${BACKEND_URL + FILES_BASE}/list?project_id=${project_id}`;
-      const listRes = await fetch(listUrl, {
-        headers: { "Authorization": "Bearer " + (token || "") }
-      });
-
-      if (!listRes.ok) {
-        const txt = await listRes.text();
-        if (out) out.textContent = txt || "فشل جلب الملفات لهذا المشروع قبل التحليل.";
-        showError("فشل جلب الملفات قبل التحليل.");
-        return;
-      }
-
-      const data = await listRes.json().catch(() => []);
-      if (!Array.isArray(data) || data.length === 0) {
-        if (out) out.textContent = "لا توجد ملفات لتحليلها لهذا المشروع.";
-        showError("لا توجد ملفات لتحليلها لهذا المشروع.");
-        return;
-      }
-
-      window._lastFiles = data;
-      file_id = data[0].id;
-    }
-
-    const url = BACKEND_URL + FILES_BASE + "/analyze";
-    const payload = { project_id, file_id };
-
-    const res = await fetch(url, {
+    const analyzeUrl = BACKEND_URL + ANALYSIS_BASE + "/run";
+    const res = await fetch(analyzeUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + (token || "")
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        project_id: pid,
+        file_id: file_id
+      })
     });
 
     const text = await res.text();
+    out.textContent = text;
 
-    if (res.ok) {
-      if (out) out.textContent = text;
-      showInfo("تم تحليل الملف بنجاح. يمكنك رؤية النتيجة في الدردشة أيضاً.");
-    } else {
-      if (out) out.textContent = text;
-      if (res.status === 404) {
-        showError("تعذّر العثور على الملف أو المشروع لهذا التحليل.");
-      } else if (res.status === 422) {
-        showError("الطلب غير صحيح، تأكد من رقم المشروع.");
-      } else {
-        showError("فشل تحليل الملف.");
-      }
-    }
   } catch (err) {
     console.error(err);
-    if (out) out.textContent = "خطأ في تحليل الملف.";
-    showError("خطأ في تحليل الملف.");
+    out.textContent = "فشل تحليل الملف";
   }
 }
 
-// =======================
-// دردشة
-// =======================
+/* ===========================
+   إرسال رسالة للدردشة
+=========================== */
+
 async function sendMsg() {
   try {
     const pidRaw = document.getElementById("c_pid").value.trim();
     const text   = document.getElementById("c_text").value.trim();
-    if (!text) {
-      showError("فضلاً اكتب رسالة.");
-      return;
-    }
 
     const project_id = pidRaw ? parseInt(pidRaw, 10) : null;
-    if (pidRaw && Number.isNaN(project_id)) {
-      showError("رقم المشروع غير صحيح.");
-      return;
-    }
 
     const url = BACKEND_URL + CHAT_BASE + "/send";
 
@@ -619,12 +455,10 @@ async function sendMsg() {
     });
 
     if (!res.ok) {
-      const t = await res.text();
-      showError(t || "فشل إرسال الرسالة");
+      showError("فشل الإرسال");
       return;
     }
 
-    // طلب الرد من الذكاء الاصطناعي
     const replyUrl = BACKEND_URL + CHAT_BASE + "/reply";
     const replyRes = await fetch(replyUrl, {
       method: "POST",
@@ -639,46 +473,40 @@ async function sendMsg() {
       })
     });
 
-    const replyText = await replyRes.text();
     if (!replyRes.ok) {
-      showError(replyText || "فشل الحصول على رد الذكاء الاصطناعي");
+      showError("فشل الحصول على الرد");
       return;
     }
 
     await loadHistory();
+
   } catch (err) {
     console.error(err);
-    showError("خطأ في إرسال الرسالة");
+    showError("خطأ بالدردشة");
   }
 }
+
+/* ===========================
+   جلب السجل
+=========================== */
 
 async function loadHistory() {
   try {
     const pidRaw = document.getElementById("c_pid").value.trim();
     const project_id = pidRaw ? parseInt(pidRaw, 10) : null;
-    const box  = document.getElementById("chat_box");
+    const box = document.getElementById("chat_box");
 
     let url = BACKEND_URL + CHAT_BASE + "/history";
     const params = new URLSearchParams();
     params.set("session_id", SESSION_ID);
-    if (project_id && !Number.isNaN(project_id)) {
-      params.set("project_id", project_id);
-    }
+    if (project_id) params.set("project_id", project_id);
     url += "?" + params.toString();
 
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
-    if (!res.ok) {
-      const t = await res.text();
-      if (box) box.textContent = t || "فشل جلب السجل.";
-      return;
-    }
-
     const data = await res.json().catch(() => []);
-
-    if (!Array.isArray(data) || !box) return;
 
     const lines = data.map((m) => {
       const who =
@@ -691,6 +519,7 @@ async function loadHistory() {
     });
 
     box.textContent = lines.join("\n---------------------\n");
+
   } catch (err) {
     console.error(err);
     const box = document.getElementById("chat_box");
@@ -698,170 +527,37 @@ async function loadHistory() {
   }
 }
 
-// =======================
-// صوت
-// =======================
-async function uploadAudio() {
-  try {
-    if (!window._chunks || !_chunks.length) {
-      showError("لا يوجد تسجيل");
-      return;
-    }
-    const pidRaw = document.getElementById("v_pid").value.trim();
-    const project_id = pidRaw ? parseInt(pidRaw, 10) : null;
-    if (pidRaw && Number.isNaN(project_id)) {
-      showError("رقم المشروع غير صحيح.");
-      return;
-    }
+/* ===========================
+   تهيئة النظام
+=========================== */
 
-    const blob = new Blob(_chunks, { type: "audio/webm" });
-    const fd = new FormData();
-    if (project_id) fd.append("project_id", project_id);
-    fd.append("audio", blob, "voice.webm");
-
-    const url = BACKEND_URL + VOICE_BASE + "/upload";
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Authorization": "Bearer " + (token || "") },
-      body: fd
-    });
-
-    const text = await res.text();
-    const out = document.getElementById("voice_resp");
-    if (out) out.textContent = text;
-    _chunks = [];
-  } catch (err) {
-    console.error(err);
-    const out = document.getElementById("voice_resp");
-    if (out) out.textContent = "خطأ في رفع الصوت.";
-  }
-}
-
-// =======================
-// كاميرا / رؤية
-// =======================
-async function snap() {
-  try {
-    const v = document.getElementById("vid");
-    if (!v || !v.srcObject) {
-      showError("شغّل الكاميرا أولاً");
-      return;
-    }
-    const cv = document.getElementById("cv");
-    cv.width = v.videoWidth;
-    cv.height = v.videoHeight;
-    cv.getContext("2d").drawImage(v, 0, 0);
-
-    const blob = await new Promise((resolve) => cv.toBlob(resolve, "image/png"));
-    const pidRaw = document.getElementById("i_pid").value.trim();
-    const project_id = pidRaw ? parseInt(pidRaw, 10) : null;
-    if (pidRaw && Number.isNaN(project_id)) {
-      showError("رقم المشروع غير صحيح.");
-      return;
-    }
-
-    const fd = new FormData();
-    if (project_id) fd.append("project_id", project_id);
-    fd.append("image", blob, "snap.png");
-
-    const url = BACKEND_URL + VISION_BASE + "/upload";
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Authorization": "Bearer " + (token || "") },
-      body: fd
-    });
-
-    const text = await res.text();
-    const out = document.getElementById("img_resp");
-    if (out) out.textContent = text;
-  } catch (err) {
-    console.error(err);
-    const out = document.getElementById("img_resp");
-    if (out) out.textContent = "خطأ في رفع الصورة.";
-  }
-}
-
-// =======================
-// حوكمة
-// =======================
-async function createPolicy() {
-  try {
-    const name  = document.getElementById("pol_name").value.trim();
-    const rules = document.getElementById("pol_rules").value.trim() || "{}";
-    const out   = document.getElementById("pol_out");
-
-    let parsed;
-    try {
-      parsed = JSON.parse(rules);
-    } catch {
-      showError("صيغة JSON غير صحيحة في الحقول.");
-      return;
-    }
-
-    const url = BACKEND_URL + GOV_BASE + "/policies";
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + (token || "")
-      },
-      body: JSON.stringify({ name, rules: parsed })
-    });
-
-    const text = await res.text();
-    if (out) out.textContent = text;
-  } catch (err) {
-    console.error(err);
-    const out = document.getElementById("pol_out");
-    if (out) out.textContent = "خطأ في إنشاء السياسة.";
-  }
-}
-
-async function listPolicies() {
-  try {
-    const out = document.getElementById("pol_out");
-    const url = BACKEND_URL + GOV_BASE + "/policies";
-
-    const res = await fetch(url, {
-      headers: { "Authorization": "Bearer " + (token || "") }
-    });
-
-    const text = await res.text();
-    if (out) out.textContent = text;
-  } catch (err) {
-    console.error(err);
-    const out = document.getElementById("pol_out");
-    if (out) out.textContent = "خطأ في جلب السياسات.";
-  }
-}
-
-// =======================
-// تهيئة التطبيق
-// =======================
 window.addEventListener("DOMContentLoaded", () => {
   const navAuth     = document.getElementById("nav-auth");
   const navProjects = document.getElementById("nav-projects");
   const navFiles    = document.getElementById("nav-files");
   const navChat     = document.getElementById("nav-chat");
-  const navVoice    = document.getElementById("nav-voice");
-  const navVision   = document.getElementById("nav-vision");
-  const navGov      = document.getElementById("nav-gov");
 
   if (navAuth)     navAuth.onclick     = authView;
   if (navProjects) navProjects.onclick = projectsView;
   if (navFiles)    navFiles.onclick    = filesView;
   if (navChat)     navChat.onclick     = chatView;
-  if (navVoice)    navVoice.onclick    = voiceView;
-  if (navVision)   navVision.onclick   = visionView;
-  if (navGov)      navGov.onclick      = govView;
 
-  // الصفحة الافتراضية
+  // إنشاء زر تسجيل الخروج في الشريط العلوي
+  const nav = document.querySelector("header nav");
+  if (nav && !document.getElementById("nav-logout")) {
+    const btn = document.createElement("button");
+    btn.id = "nav-logout";
+    btn.textContent = "تسجيل الخروج";
+    btn.style.display = "none";
+    btn.onclick = logout;
+    nav.appendChild(btn);
+  }
+
+  // عرض صفحة الحساب حسب حالة التوكن
   authView();
+  updateLogoutButton();
 
-  // فحص اتصال الباك إند (يظهر فقط في console)
+  // فحص اتصال الباك إند
   fetch(`${BACKEND_URL}/api/health`)
     .then((r) => r.json())
     .then((d) => console.log("Backend Connected:", d))

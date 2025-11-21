@@ -160,7 +160,7 @@ function filesView() {
         <button onclick="analyzeFile()">تحليل ومعالجة</button>
       </div>
 
-      <pre id="file_resp" class="small" style="margin-top:16px">—</pre>
+      <div id="file_resp" class="card small" style="margin-top:16px;white-space:pre-wrap;word-break:break-word">—</div>
     </section>
   `);
 }
@@ -178,14 +178,12 @@ function chatView() {
         <div class="col"><input id="c_text" placeholder="اكتب رسالتك" /></div>
       </div>
 
-      <p class="small" style="margin-top:8px">Session ID: ${SESSION_ID}</p>
-
-      <div class="actions">
+      <div class="actions" style="margin-top:8px">
         <button onclick="sendMsg()">إرسال</button>
         <button onclick="loadHistory()">تحديث السجل</button>
       </div>
 
-      <div id="chat_box" class="card small" style="margin-top:16px;white-space:pre-wrap">—</div>
+      <div id="chat_box" class="card small" style="margin-top:16px;max-height:360px;overflow-y:auto"></div>
     </section>
   `);
 }
@@ -246,7 +244,6 @@ async function login() {
       token = data.access_token;
       localStorage.setItem("token", token);
 
-      // نخزن الإيميل لاستخدامه لاحقاً في عرض الاسم إن لم يتوفر الاسم
       if (email) {
         userEmail = email;
         localStorage.setItem("user_email", userEmail);
@@ -277,6 +274,11 @@ async function createProject() {
     const name = document.getElementById("p_name").value.trim();
     const desc = document.getElementById("p_desc").value.trim();
 
+    if (!name) {
+      showError("فضلاً أدخل اسم المشروع");
+      return;
+    }
+
     const url = BACKEND_URL + PROJECTS_PATH;
 
     const res = await fetch(url, {
@@ -290,18 +292,19 @@ async function createProject() {
 
     const text = await res.text();
 
-    box.innerHTML = `<pre>Status: ${res.status}\n${text}</pre>`;
-
     if (res.ok) {
-      listProjects();
+      showInfo("تم إنشاء المشروع");
+      if (box) box.textContent = "تم إنشاء المشروع بنجاح. تم تحديث القائمة.";
+      await listProjects();
     } else {
-      showError("فشل إنشاء المشروع");
+      if (box) box.textContent = `فشل إنشاء المشروع (Status: ${res.status})`;
+      showError(text || "فشل إنشاء المشروع");
     }
 
   } catch (err) {
     console.error(err);
-    showError("خطأ في إنشاء المشروع");
     if (box) box.textContent = "خطأ في الاتصال بالخادم.";
+    showError("حدث خطأ أثناء إنشاء المشروع");
   }
 }
 
@@ -318,19 +321,31 @@ async function listProjects() {
     });
 
     if (!res.ok) {
-      box.textContent = "فشل جلب المشاريع";
+      box.textContent = `فشل جلب المشاريع (Status: ${res.status})`;
       return;
     }
 
     const data = await res.json().catch(() => []);
+
+    if (!Array.isArray(data) || !data.length) {
+      box.textContent = "لا توجد مشاريع حتى الآن.";
+      return;
+    }
+
     box.innerHTML =
-      "<ul>" +
-      data.map(p => `<li>${p.id} — ${p.name}</li>`).join("") +
-      "</ul>";
+      '<div class="projects-list">' +
+      data.map(p => `
+        <div class="project-item">
+          <div class="project-title">${p.name}</div>
+          <div class="project-meta">رقم المشروع: ${p.id}</div>
+          ${p.description ? `<div class="project-meta">الوصف: ${p.description}</div>` : ""}
+        </div>
+      `).join("") +
+      "</div>";
 
   } catch (err) {
     console.error(err);
-    box.textContent = "خطأ في جلب المشاريع";
+    box.textContent = "خطأ في جلب المشاريع.";
   }
 }
 
@@ -342,8 +357,20 @@ async function uploadFile() {
   const out = document.getElementById("file_resp");
 
   try {
-    const pid = parseInt(document.getElementById("f_pid").value.trim(), 10);
-    const f   = document.getElementById("file_input").files[0];
+    const pidRaw = document.getElementById("f_pid").value.trim();
+    const pid    = parseInt(pidRaw, 10);
+    const f      = document.getElementById("file_input").files[0];
+
+    if (Number.isNaN(pid)) {
+      showError("فضلاً أدخل رقم مشروع صحيح.");
+      if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
+      return;
+    }
+    if (!f) {
+      showError("فضلاً اختر ملفاً للرفع.");
+      if (out) out.textContent = "فضلاً اختر ملفاً للرفع.";
+      return;
+    }
 
     const fd = new FormData();
     fd.append("project_id", pid);
@@ -358,11 +385,22 @@ async function uploadFile() {
     });
 
     const text = await res.text();
-    out.textContent = text;
+    console.log("Upload response:", text);
+
+    if (res.ok) {
+      if (out) out.textContent = "تم رفع الملف بنجاح.";
+      showInfo("تم رفع الملف بنجاح");
+    } else if (res.status === 404) {
+      if (out) out.textContent = "لا يوجد مشروع بهذا الرقم.";
+      showError("لا يوجد مشروع بهذا الرقم.");
+    } else {
+      if (out) out.textContent = text || "فشل رفع الملف.";
+      showError("فشل رفع الملف");
+    }
 
   } catch (err) {
     console.error(err);
-    out.textContent = "خطأ";
+    if (out) out.textContent = "خطأ في رفع الملف.";
   }
 }
 
@@ -373,16 +411,63 @@ async function uploadFile() {
 async function listFiles() {
   const out = document.getElementById("file_resp");
   try {
-    const pid = document.getElementById("f_pid").value.trim();
+    const pidRaw = document.getElementById("f_pid").value.trim();
+    const pid    = parseInt(pidRaw, 10);
+
+    if (Number.isNaN(pid)) {
+      showError("فضلاً أدخل رقم مشروع صحيح.");
+      if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
+      return;
+    }
+
     const url = `${BACKEND_URL + FILES_BASE}/list?project_id=${pid}`;
 
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: { "Authorization": "Bearer " + (token || "") }
+    });
+
     const text = await res.text();
-    out.textContent = text;
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        if (out) out.textContent = "لا يوجد مشروع بهذا الرقم.";
+        showError("لا يوجد مشروع بهذا الرقم.");
+      } else {
+        if (out) out.textContent = text || "فشل جلب الملفات.";
+        showError("فشل جلب الملفات.");
+      }
+      return;
+    }
+
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+
+    if (!Array.isArray(data) || !data.length) {
+      out.textContent = "لا توجد ملفات لهذا المشروع حتى الآن.";
+      return;
+    }
+
+    const html =
+      '<div class="files-list">' +
+      data.map(f => `
+        <div class="file-item">
+          <div class="file-name">${f.filename}</div>
+          <div class="file-meta">ID: ${f.id} • النوع: ${f.mime_type || "غير معروف"}</div>
+          <div class="file-meta">الحجم: ${f.size_bytes ? Math.round(f.size_bytes / 1024) + " كيلوبايت" : "غير معروف"}</div>
+          <div class="file-meta">التاريخ: ${f.created_at || "-"}</div>
+        </div>
+      `).join("") +
+      "</div>";
+
+    out.innerHTML = html;
 
   } catch (err) {
     console.error(err);
-    out.textContent = "خطأ في جلب الملفات";
+    if (out) out.textContent = "خطأ في جلب الملفات.";
   }
 }
 
@@ -393,14 +478,38 @@ async function listFiles() {
 async function analyzeFile() {
   const out = document.getElementById("file_resp");
   try {
-    const pid = parseInt(document.getElementById("f_pid").value.trim(), 10);
+    const pidRaw = document.getElementById("f_pid").value.trim();
+    const pid    = parseInt(pidRaw, 10);
 
-    const listUrl = `${BACKEND_URL + FILES_BASE}/list?project_id=${pid}`;
-    const listRes = await fetch(listUrl);
-    const listData = await listRes.json();
+    if (Number.isNaN(pid)) {
+      showError("فضلاً أدخل رقم مشروع صحيح.");
+      if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
+      return;
+    }
+
+    // جلب قائمة الملفات للحصول على أول ملف
+    const listUrl  = `${BACKEND_URL + FILES_BASE}/list?project_id=${pid}`;
+    const listRes  = await fetch(listUrl, {
+      headers: { "Authorization": "Bearer " + (token || "") }
+    });
+    const listText = await listRes.text();
+
+    if (!listRes.ok) {
+      if (out) out.textContent = listText || "فشل جلب الملفات.";
+      showError("فشل جلب الملفات قبل التحليل.");
+      return;
+    }
+
+    let listData = [];
+    try {
+      listData = JSON.parse(listText);
+    } catch {
+      listData = [];
+    }
 
     if (!Array.isArray(listData) || !listData.length) {
-      showError("لا يوجد ملفات");
+      showError("لا يوجد ملفات لتحليلها في هذا المشروع.");
+      if (out) out.textContent = "لا يوجد ملفات لتحليلها في هذا المشروع.";
       return;
     }
 
@@ -420,11 +529,29 @@ async function analyzeFile() {
     });
 
     const text = await res.text();
-    out.textContent = text;
+
+    if (!res.ok) {
+      if (out) out.textContent = text || "فشل تحليل الملف.";
+      showError("فشل تحليل الملف");
+      return;
+    }
+
+    let msg = text;
+    try {
+      const obj = JSON.parse(text);
+      if (obj && typeof obj === "object" && obj.message) {
+        msg = obj.message;
+      }
+    } catch {
+      // نستخدم النص كما هو
+    }
+
+    if (out) out.textContent = "نتيجة التحليل:\n\n" + msg;
+    showInfo("تم تحليل الملف بنجاح، ويمكنك رؤية النتيجة في الدردشة أيضاً.");
 
   } catch (err) {
     console.error(err);
-    out.textContent = "فشل تحليل الملف";
+    if (out) out.textContent = "فشل تحليل الملف.";
   }
 }
 
@@ -437,7 +564,17 @@ async function sendMsg() {
     const pidRaw = document.getElementById("c_pid").value.trim();
     const text   = document.getElementById("c_text").value.trim();
 
+    if (!text) {
+      showError("فضلاً اكتب رسالة.");
+      return;
+    }
+
     const project_id = pidRaw ? parseInt(pidRaw, 10) : null;
+
+    if (pidRaw && Number.isNaN(project_id)) {
+      showError("رقم المشروع غير صحيح.");
+      return;
+    }
 
     const url = BACKEND_URL + CHAT_BASE + "/send";
 
@@ -455,7 +592,8 @@ async function sendMsg() {
     });
 
     if (!res.ok) {
-      showError("فشل الإرسال");
+      const t = await res.text();
+      showError(t || "فشل إرسال الرسالة");
       return;
     }
 
@@ -473,10 +611,14 @@ async function sendMsg() {
       })
     });
 
+    const replyText = await replyRes.text();
     if (!replyRes.ok) {
-      showError("فشل الحصول على الرد");
+      showError(replyText || "فشل الحصول على رد الذكاء الاصطناعي");
       return;
     }
+
+    // تفريغ حقل الرسالة بعد الإرسال
+    document.getElementById("c_text").value = "";
 
     await loadHistory();
 
@@ -487,7 +629,7 @@ async function sendMsg() {
 }
 
 /* ===========================
-   جلب السجل
+   جلب السجل (دردشة بفقاعات)
 =========================== */
 
 async function loadHistory() {
@@ -499,26 +641,47 @@ async function loadHistory() {
     let url = BACKEND_URL + CHAT_BASE + "/history";
     const params = new URLSearchParams();
     params.set("session_id", SESSION_ID);
-    if (project_id) params.set("project_id", project_id);
+    if (project_id && !Number.isNaN(project_id)) {
+      params.set("project_id", project_id);
+    }
     url += "?" + params.toString();
 
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
+    if (!res.ok) {
+      const t = await res.text();
+      if (box) box.textContent = t || "فشل جلب السجل.";
+      return;
+    }
+
     const data = await res.json().catch(() => []);
 
-    const lines = data.map((m) => {
-      const who =
-        m.role === "assistant"
-          ? "[المساعد]"
-          : m.role === "user"
-          ? "[أنت]"
-          : `[${m.role}]`;
-      return `${who} ${m.content}`;
-    });
+    if (!box) return;
 
-    box.textContent = lines.join("\n---------------------\n");
+    if (!Array.isArray(data) || !data.length) {
+      box.textContent = "لا توجد رسائل بعد.";
+      return;
+    }
+
+    const messagesHtml =
+      '<div class="chat-messages">' +
+      data.map(m => {
+        const cls = m.role === "assistant" ? "assistant" : "user";
+        const safeContent = (m.content || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+        return `
+          <div class="chat-message ${cls}">
+            <div class="chat-bubble">${safeContent}</div>
+          </div>
+        `;
+      }).join("") +
+      "</div>";
+
+    box.innerHTML = messagesHtml;
 
   } catch (err) {
     console.error(err);
@@ -542,7 +705,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (navFiles)    navFiles.onclick    = filesView;
   if (navChat)     navChat.onclick     = chatView;
 
-  // إنشاء زر تسجيل الخروج في الشريط العلوي
+  // إنشاء زر تسجيل الخروج في الشريط العلوي إذا لم يكن موجوداً
   const nav = document.querySelector("header nav");
   if (nav && !document.getElementById("nav-logout")) {
     const btn = document.createElement("button");

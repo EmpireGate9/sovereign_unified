@@ -10,3 +10,100 @@ input,textarea,select{background:#0e0e0e;color:#fff;border:1px solid #333;border
 .col{flex:1 1 280px}
 .actions button{padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1b1b1b;color:#fff}
 .small{font-size:12px;color:#aaa}
+/* مشاريع */
+.projects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-item {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #181818;
+  border: 1px solid #333;
+  font-size: 0.95rem; /* خط أكبر قليلاً من العادي داخل القائمة */
+}
+
+.project-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.project-meta {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+/* ملفات */
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-item {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #181818;
+  border: 1px solid #333;
+  font-size: 0.9rem;
+}
+
+.file-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.file-meta {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+/* حقل اختيار الملف */
+input[type="file"] {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #111;
+  font-size: 0.9rem;
+}
+
+/* دردشة — فقاعات */
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-message {
+  display: flex;
+}
+
+.chat-message.user {
+  justify-content: flex-start;
+}
+
+.chat-message.assistant {
+  justify-content: flex-end;
+}
+
+.chat-bubble {
+  max-width: 90%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-message.user .chat-bubble {
+  background: #1f2933;
+  border-radius: 12px 12px 12px 2px;
+}
+
+.chat-message.assistant .chat-bubble {
+  background: #111827;
+  border-radius: 12px 12px 2px 12px;
+  border: 1px solid #374151;
+}

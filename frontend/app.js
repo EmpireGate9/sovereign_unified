@@ -7,7 +7,6 @@ const REGISTER_PATH = "/api/auth/register";
 const LOGIN_PATH    = "/api/auth/login";
 const PROJECTS_PATH = "/api/projects";
 const FILES_BASE    = "/api/files";
-// تركنا CHAT_BASE لكن لن نستخدمه في الدردشة لتفادي أي لبس
 const CHAT_BASE     = "/api/chat";
 const VOICE_BASE    = "/api/voice";
 const VISION_BASE   = "/api/vision";
@@ -33,7 +32,7 @@ function ensureSessionId() {
 const SESSION_ID = ensureSessionId();
 
 // =======================
-// دوال مساعدة عامة
+// دوال مساعدة
 // =======================
 function setView(html) {
   const root = document.getElementById("view");
@@ -47,6 +46,16 @@ function showError(msg) {
 
 function showInfo(msg) {
   alert(msg);
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // =======================
@@ -126,7 +135,7 @@ function projectsView() {
         <button onclick="listProjects()">تحديث القائمة</button>
       </div>
 
-      <div id="projects_list" class="card small" style="margin-top:16px">
+      <div id="projects_list" class="card small" style="margin-top:16px;font-size:15px;line-height:1.6">
         لا توجد مشاريع بعد.
       </div>
     </section>
@@ -150,7 +159,7 @@ function filesView() {
         </div>
       </div>
 
-      <div class="actions" style="margin-top:16px">
+      <div class="actions" style="margin-top:16px;gap:8px;flex-wrap:wrap">
         <button onclick="uploadFile()">رفع ملف</button>
         <button onclick="listFiles()">عرض الملفات</button>
         <button onclick="analyzeFile()">تحليل ومعالجة</button>
@@ -185,8 +194,8 @@ function chatView() {
         <button onclick="loadHistory()">تحديث السجل</button>
       </div>
 
-      <div id="chat_box" class="card small" style="margin-top:16px;white-space:pre-wrap">
-        —
+      <div id="chat_box" class="card small" style="margin-top:16px;white-space:pre-wrap;max-height:350px;overflow-y:auto">
+        لا توجد رسائل بعد.
       </div>
     </section>
   `);
@@ -438,14 +447,14 @@ async function listProjects() {
       }
 
       listBox.innerHTML =
-        '<div class="projects-list">' +
+        '<div style="display:flex;flex-direction:column;gap:10px">' +
         data
           .map(
             (p) => `
-              <div class="project-item">
-                <div class="project-title">#${p.id} — ${p.name}</div>
-                <div class="project-meta">
-                  ${p.description ? p.description : "بدون وصف"}
+              <div style="padding:8px 10px;border-radius:10px;border:1px solid #333;background:#111;">
+                <div style="font-weight:600;margin-bottom:4px;font-size:15px">#${p.id} — ${escapeHtml(p.name)}</div>
+                <div style="opacity:0.8;font-size:14px">
+                  ${p.description ? escapeHtml(p.description) : "بدون وصف"}
                 </div>
               </div>
             `
@@ -558,14 +567,17 @@ async function listFiles() {
     }
 
     const html =
-      '<div class="files-list">' +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
       data
         .map(
           (f) => `
-            <div class="file-item">
-              <div class="file-title">${f.filename} — #${f.id}</div>
-              <div class="file-meta">
-                ${f.size_bytes ?? f.size} بايت — ${f.mime_type || ""} — ${f.created_at || ""}
+            <div style="padding:8px 10px;border-radius:10px;border:1px solid #333;background:#111;">
+              <div style="font-weight:600;margin-bottom:4px;font-size:14px">
+                ${escapeHtml(f.filename)} — #${f.id}
+              </div>
+              <div style="opacity:0.8;font-size:13px">
+                ${(f.size_bytes ?? f.size) || 0} بايت — ${escapeHtml(f.mime_type || "")}
+                ${f.created_at ? " — " + escapeHtml(f.created_at) : ""}
               </div>
             </div>
           `
@@ -597,6 +609,7 @@ async function analyzeFile() {
       return;
     }
 
+    // 1) جلب قائمة الملفات للمشروع
     const listUrl  = `${BACKEND_URL}${FILES_BASE}/list?project_id=${pid}`;
     const listRes  = await fetch(listUrl, {
       headers: { "Authorization": "Bearer " + (token || "") }
@@ -623,6 +636,7 @@ async function analyzeFile() {
       return;
     }
 
+    // نحلل أول ملف (يمكن لاحقاً إضافة اختيار ملف معين)
     const file_id = listData[0].id;
 
     const payload = JSON.stringify({
@@ -676,7 +690,7 @@ async function analyzeFile() {
 }
 
 // =======================
-// دردشة (مسارات صريحة)
+// دردشة (إرسال + فقاعات)
 // =======================
 async function sendMsg() {
   try {
@@ -752,13 +766,18 @@ async function loadHistory() {
     const project_id = pidRaw ? parseInt(pidRaw, 10) : null;
     const box        = document.getElementById("chat_box");
 
+    if (!box) return;
+
     let url = `${BACKEND_URL}/api/chat/history`;
     const params = new URLSearchParams();
     params.set("session_id", SESSION_ID);
     if (project_id && !Number.isNaN(project_id)) {
       params.set("project_id", project_id);
     }
-    url += "?" + params.toString();
+    const qs = params.toString();
+    if (qs) {
+      url += "?" + qs;
+    }
 
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + (token || "") }
@@ -766,25 +785,55 @@ async function loadHistory() {
 
     if (!res.ok) {
       const t = await res.text();
-      if (box) box.textContent = t || "فشل جلب السجل.";
+      box.textContent = t || "فشل جلب السجل.";
       return;
     }
 
     const data = await res.json().catch(() => []);
 
-    if (!Array.isArray(data) || !box) return;
+    if (!Array.isArray(data) || !data.length) {
+      box.textContent = "لا توجد رسائل بعد.";
+      return;
+    }
 
-    const lines = data.map((m) => {
-      const who =
-        m.role === "assistant"
-          ? "[المساعد]"
-          : m.role === "user"
-          ? "[أنت]"
-          : `[${m.role}]`;
-      return `${who} ${m.content}`;
-    });
+    const userBubbleStyle = `
+      max-width:80%;
+      margin:4px 0 4px auto;
+      padding:8px 12px;
+      border-radius:16px 16px 0 16px;
+      background:#1976d2;
+      color:#fff;
+      white-space:pre-wrap;
+      font-size:14px;
+    `;
 
-    box.textContent = lines.join("\n---------------------\n");
+    const assistantBubbleStyle = `
+      max-width:80%;
+      margin:4px auto 4px 0;
+      padding:8px 12px;
+      border-radius:16px 16px 16px 0;
+      background:#333;
+      color:#fff;
+      white-space:pre-wrap;
+      font-size:14px;
+    `;
+
+    const html = data
+      .map((m) => {
+        const isAssistant = m.role === "assistant";
+        const bubbleStyle = isAssistant ? assistantBubbleStyle : userBubbleStyle;
+        const justify = isAssistant ? "flex-start" : "flex-end";
+        return `
+          <div style="display:flex;justify-content:${justify};margin:2px 0">
+            <div style="${bubbleStyle}">
+              ${escapeHtml(m.content)}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    box.innerHTML = html;
   } catch (err) {
     console.error(err);
     const box = document.getElementById("chat_box");

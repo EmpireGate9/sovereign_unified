@@ -7,9 +7,10 @@ from .routers.files import router as files_router
 from .routers.vision import router as vision_router
 from .routers.voice import router as voice_router
 from .routers.chat import router as chat_router
-
-# ← السطر الجديد (1)
 from .routers.projects import router as projects_router
+
+# السطر الجديد: استيراد راوتر التحليل
+from .routers.analysis import router as analysis_router
 
 app = FastAPI(title="Sovereign Core")
 
@@ -31,8 +32,11 @@ api_router.include_router(vision_router, prefix="/vision", tags=["vision"])
 api_router.include_router(voice_router, prefix="/voice", tags=["voice"])
 api_router.include_router(chat_router, prefix="/chat", tags=["chat"])
 
-# ← السطر الجديد (2)
+# المشاريع
 api_router.include_router(projects_router)
+
+# السطر الجديد: تضمين راوتر التحليل
+api_router.include_router(analysis_router)
 
 # Health Check
 @api_router.get("/health")

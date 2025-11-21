@@ -19,7 +19,7 @@ let token = localStorage.getItem("token") || "";
 function ensureSessionId() {
   let s = localStorage.getItem("session_id");
   if (!s) {
-    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    if (crypto && crypto.randomUUID) {
       s = crypto.randomUUID();
     } else {
       s = "sess-" + Date.now() + "-" + Math.random().toString(16).slice(2);
@@ -29,6 +29,9 @@ function ensureSessionId() {
   return s;
 }
 const SESSION_ID = ensureSessionId();
+
+// آخر ملفات تم جلبها من السيرفر (لكي نعرف file_id للتحليل)
+window._lastFiles = [];
 
 // =======================
 // دوال مساعدة
@@ -119,10 +122,11 @@ function filesView() {
       <div class="actions" style="margin-top:16px">
         <button onclick="uploadFile()">رفع ملف</button>
         <button onclick="listFiles()">عرض الملفات</button>
+        <button onclick="analyzeFile()">تحليل ومعالجة</button>
       </div>
       <pre id="file_resp"
            class="small"
-           style="margin-top:16px;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;overflow-x:auto;">—</pre>
+           style="margin-top:16px;white-space:pre-wrap;word-break:break-word">—</pre>
     </section>
   `);
 }
@@ -149,7 +153,7 @@ function chatView() {
       </div>
       <div id="chat_box"
            class="card small"
-           style="margin-top:16px;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;overflow-x:auto;">—</div>
+           style="margin-top:16px;white-space:pre-wrap;word-break:break-word">—</div>
     </section>
   `);
 }
@@ -213,7 +217,8 @@ function visionView() {
           <input id="i_pid" placeholder="رقم المشروع (اختياري)" />
         </div>
       </div>
-      <video id="vid" autoplay playsinline style="max-width:100%;border-radius:12px;border:1px solid #333;margin-top:12px"></video>
+      <video id="vid" autoplay playsinline
+             style="max-width:100%;border-radius:12px;border:1px solid #333;margin-top:12px"></video>
       <div class="actions" style="margin-top:16px">
         <button id="cam_btn">تشغيل / إيقاف</button>
         <button onclick="snap()">التقاط & رفع</button>
@@ -265,7 +270,7 @@ function govView() {
 }
 
 // =======================
-// تسجيل مستخدم
+// حساب: تسجيل / دخول
 // =======================
 async function register() {
   try {
@@ -291,9 +296,6 @@ async function register() {
   }
 }
 
-// =======================
-// تسجيل الدخول
-// =======================
 async function login() {
   try {
     const email = document.getElementById("l_email").value.trim();
@@ -347,11 +349,20 @@ async function createProject() {
       body: JSON.stringify(payload)
     });
 
+    const text = await res.text();
+
+    if (listBox) {
+      listBox.innerHTML =
+        `<pre>Status: ${res.status}\nURL: ${url}\nRequest body: ${JSON.stringify(payload)}\nResponse:\n${text}</pre>`;
+    }
+
     if (res.ok) {
       showInfo("تم إنشاء المشروع");
       listProjects();
     } else if (res.status === 401) {
       showError("فضلاً سجّل الدخول أولاً");
+    } else if (res.status === 404) {
+      showError("المسار غير موجود على الخادم (404)");
     } else {
       showError("فشل إنشاء المشروع");
     }
@@ -447,7 +458,6 @@ async function uploadFile() {
     console.error(err);
     const out = document.getElementById("file_resp");
     if (out) out.textContent = "خطأ في رفع الملف.";
-    showError("خطأ في رفع الملف.");
   }
 }
 
@@ -458,7 +468,7 @@ async function listFiles() {
     const pid = parseInt(pidRaw, 10);
     if (Number.isNaN(pid)) {
       if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
-      showError("فضلاً أدخل رقم مشروع صحيح.");
+      showError("فضلاً أدخل رقم مشروع صحيح.";
       return;
     }
 
@@ -467,63 +477,82 @@ async function listFiles() {
       headers: { "Authorization": "Bearer " + (token || "") }
     });
 
-    if (!res.ok) {
-      if (res.status === 404 || res.status === 422) {
-        if (out) out.textContent = "لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.";
-        showError("لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.");
-      } else if (res.status === 401) {
-        if (out) out.textContent = "فضلاً سجّل الدخول أولاً.";
-        showError("فضلاً سجّل الدخول أولاً.");
-      } else {
-        const t = await res.text();
-        if (out) out.textContent = t || "فشل جلب الملفات.";
-        showError("فشل جلب الملفات.");
+    const text = await res.text();
+
+    if (res.ok) {
+      // نحاول حفظ القائمة في الذاكرة لاستخدامها في التحليل
+      try {
+        const data = JSON.parse(text);
+        if (Array.isArray(data)) {
+          window._lastFiles = data;
+        }
+      } catch {
+        // نتركها كما هي إذا لم تكن JSON.
       }
-      return;
-    }
-
-    const data = await res.json().catch(() => null);
-
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      if (out) out.textContent = "لا توجد ملفات لهذا المشروع حتى الآن.";
-      return;
-    }
-
-    const html = data
-      .map((f) => {
-        const size = f.size_bytes != null ? `${f.size_bytes} بايت` : "";
-        const created = f.created_at ? `<div class="small">${f.created_at}</div>` : "";
-        return `
-          <div class="file-row"
-               style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px">
-            <div style="flex:1 1 auto;min-width:0">
-              <strong>#${f.id}</strong> — ${f.filename}
-              ${size ? `(<span class="small">${size}</span>)` : ""}
-              ${created}
-            </div>
-            <div style="flex:0 0 auto">
-              <button onclick="analyzeFile(${f.id})">تحليل ومعالجة</button>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
-
-    if (out) {
-      out.innerHTML = html;
+      if (out) out.textContent = text || "لا توجد ملفات لهذا المشروع حتى الآن.";
+    } else if (res.status === 404 || res.status === 422) {
+      if (out) out.textContent = "لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.";
+      showError("لا يوجد مشروع بهذا الرقم أو الطلب غير صحيح.");
+    } else {
+      if (out) out.textContent = text;
+      showError("فشل جلب الملفات.");
     }
   } catch (err) {
     console.error(err);
     if (out) out.textContent = "خطأ في جلب الملفات.";
-    showError("خطأ في جلب الملفات.");
   }
 }
 
-// تحليل ملف واحد
-async function analyzeFile(fileId) {
+// =======================
+// تحليل ومعالجة ملف
+// =======================
+async function analyzeFile() {
   const out = document.getElementById("file_resp");
+
   try {
+    // رقم المشروع
+    const pidRaw = document.getElementById("f_pid").value.trim();
+    const project_id = parseInt(pidRaw, 10);
+    if (Number.isNaN(project_id)) {
+      if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
+      showError("فضلاً أدخل رقم مشروع صحيح.");
+      return;
+    }
+
+    let file_id = null;
+
+    // نحاول أخذ أول ملف من آخر قائمة
+    if (window._lastFiles && Array.isArray(window._lastFiles) && window._lastFiles.length > 0) {
+      file_id = window._lastFiles[0].id;
+    }
+
+    // إذا لا توجد قائمة، نجلبها الآن
+    if (!file_id) {
+      const listUrl = `${BACKEND_URL + FILES_BASE}/list?project_id=${project_id}`;
+      const listRes = await fetch(listUrl, {
+        headers: { "Authorization": "Bearer " + (token || "") }
+      });
+
+      if (!listRes.ok) {
+        const txt = await listRes.text();
+        if (out) out.textContent = txt || "فشل جلب الملفات لهذا المشروع قبل التحليل.";
+        showError("فشل جلب الملفات قبل التحليل.");
+        return;
+      }
+
+      const data = await listRes.json().catch(() => []);
+      if (!Array.isArray(data) || data.length === 0) {
+        if (out) out.textContent = "لا توجد ملفات لتحليلها لهذا المشروع.";
+        showError("لا توجد ملفات لتحليلها لهذا المشروع.";
+        return;
+      }
+
+      window._lastFiles = data;
+      file_id = data[0].id;
+    }
+
     const url = BACKEND_URL + FILES_BASE + "/analyze";
+    const payload = { project_id, file_id };
 
     const res = await fetch(url, {
       method: "POST",
@@ -531,28 +560,23 @@ async function analyzeFile(fileId) {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + (token || "")
       },
-      body: JSON.stringify({ file_id: fileId })
+      body: JSON.stringify(payload)
     });
 
     const text = await res.text();
 
     if (res.ok) {
-      let display = text || "تم تحليل الملف بنجاح.";
-      // محاولة تنسيق JSON على عدة أسطر
-      try {
-        const obj = JSON.parse(text);
-        display = JSON.stringify(obj, null, 2);
-      } catch (_) {
-        // ليس JSON؛ نتركه كما هو
-      }
-      if (out) out.textContent = display;
-      showInfo("تم تحليل الملف");
-    } else if (res.status === 404) {
-      if (out) out.textContent = "خدمة التحليل غير مفعّلة أو الملف غير موجود.";
-      showError("خدمة التحليل غير مفعّلة أو الملف غير موجود.");
+      if (out) out.textContent = text;
+      showInfo("تم تحليل الملف بنجاح. يمكنك رؤية النتيجة في الدردشة أيضاً.");
     } else {
-      if (out) out.textContent = text || "فشل تحليل الملف.";
-      showError("فشل تحليل الملف.");
+      if (out) out.textContent = text;
+      if (res.status === 404) {
+        showError("تعذّر العثور على الملف أو المشروع لهذا التحليل.");
+      } else if (res.status === 422) {
+        showError("الطلب غير صحيح، تأكد من رقم المشروع.");
+      } else {
+        showError("فشل تحليل الملف.");
+      }
     }
   } catch (err) {
     console.error(err);
@@ -600,6 +624,7 @@ async function sendMsg() {
       return;
     }
 
+    // طلب الرد من الذكاء الاصطناعي
     const replyUrl = BACKEND_URL + CHAT_BASE + "/reply";
     const replyRes = await fetch(replyUrl, {
       method: "POST",
@@ -833,8 +858,10 @@ window.addEventListener("DOMContentLoaded", () => {
   if (navVision)   navVision.onclick   = visionView;
   if (navGov)      navGov.onclick      = govView;
 
+  // الصفحة الافتراضية
   authView();
 
+  // فحص اتصال الباك إند (يظهر فقط في console)
   fetch(`${BACKEND_URL}/api/health`)
     .then((r) => r.json())
     .then((d) => console.log("Backend Connected:", d))

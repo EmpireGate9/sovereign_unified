@@ -11,7 +11,8 @@ const CHAT_BASE     = "/api/chat";
 const VOICE_BASE    = "/api/voice";
 const VISION_BASE   = "/api/vision";
 const GOV_BASE      = "/api/governance";
-const ANALYSIS_BASE = "/api/analysis";   // مسار التحليل
+
+// لا نستخدم ثابت لمسار التحليل الآن، سنجرب أكثر من مسار داخل الدالة نفسها
 
 let token = localStorage.getItem("token") || "";
 
@@ -581,7 +582,7 @@ async function listFiles() {
 }
 
 // =======================
-// ملفات: تحليل ومعالجة
+// ملفات: تحليل ومعالجة (مع تجربة أكثر من مسار)
 // =======================
 async function analyzeFile() {
   const out = document.getElementById("file_resp");
@@ -627,20 +628,28 @@ async function analyzeFile() {
 
     const file_id = listData[0].id;
 
-    // 3) استدعاء نقطة التحليل في الباك-إند
-    const analyzeUrl = `${BACKEND_URL}${ANALYSIS_BASE}/analyze-file`;
-
-    const res = await fetch(analyzeUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + (token || "")
-      },
-      body: JSON.stringify({
-        project_id: pid,
-        file_id: file_id
-      })
+    // 3) إعداد بيانات الطلب
+    const payload = JSON.stringify({
+      project_id: pid,
+      file_id: file_id
     });
+
+    async function callAnalysis(url) {
+      return fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + (token || "")
+        },
+        body: payload
+      });
+    }
+
+    // نجرب أولاً /api/analysis/analyze-file ثم /api/analyze-file إذا رجع 404
+    let res = await callAnalysis(`${BACKEND_URL}/api/analysis/analyze-file`);
+    if (res.status === 404) {
+      res = await callAnalysis(`${BACKEND_URL}/api/analyze-file`);
+    }
 
     const text = await res.text();
 
@@ -713,7 +722,6 @@ async function sendMsg() {
       return;
     }
 
-    // نطلب رد الذكاء الاصطناعي
     const replyUrl = BACKEND_URL + CHAT_BASE + "/reply";
     const replyRes = await fetch(replyUrl, {
       method: "POST",
@@ -734,7 +742,7 @@ async function sendMsg() {
       return;
     }
 
-    if (inputEl) inputEl.value = ""; // تفريغ حقل الرسالة بعد الإرسال
+    if (inputEl) inputEl.value = "";
     await loadHistory();
   } catch (err) {
     console.error(err);
@@ -948,10 +956,8 @@ window.addEventListener("DOMContentLoaded", () => {
   if (navVision)   navVision.onclick   = visionView;
   if (navGov)      navGov.onclick      = govView;
 
-  // الصفحة الافتراضية
   authView();
 
-  // فحص اتصال الباك إند (يظهر في الـ console فقط)
   fetch(`${BACKEND_URL}/api/health`)
     .then((r) => r.json())
     .then((d) => console.log("Backend Connected:", d))

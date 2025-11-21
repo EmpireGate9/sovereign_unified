@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-from app.database import get_db
-from app import models
-from app.auth.dependencies import get_current_user
+from ..database import get_db
+from .. import models
+from ..deps import get_current_user   # التصحيح هنا
 
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
@@ -31,12 +31,12 @@ async def analyze_file(
     project_id = body.project_id
     file_id = body.file_id
 
-    # تحقق من المشروع
+    # التحقق من وجود المشروع
     project = db.query(models.Project).filter_by(id=project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="المشروع غير موجود")
 
-    # تحقق من الملف داخل المشروع
+    # التحقق من أن الملف تابع لنفس المشروع
     file_obj = (
         db.query(models.File)
         .filter_by(id=file_id, project_id=project_id)
@@ -48,16 +48,16 @@ async def analyze_file(
             detail="الملف غير موجود داخل هذا المشروع",
         )
 
-    # نص تحليل مبدئي (يمكن لاحقاً ربطه بـ OpenAI لتحليل أعمق)
+    # نص تحليل مبدئي (لاحقاً نربطه بـ OpenAI لتحليل حقيقي)
     analysis_text = (
         f"تم تحليل الملف «{file_obj.filename}» في المشروع رقم {project_id}.\n\n"
         f"• نوع الملف: {file_obj.mime_type}\n"
         f"• الحجم: {file_obj.size} بايت\n\n"
-        "هذا تحليل أولي؛ يمكنك الآن سؤالي في الدردشة عن تفاصيل أكثر "
-        "أو عن ملخص لهذا الملف."
+        "هذا تحليل أولي؛ يمكنك الآن سؤالي في الدردشة عن ملخص هذا الملف "
+        "أو عن تفاصيل إضافية مرتبطة به."
     )
 
-    # تخزين نتيجة التحليل كرسالة (role=assistant) في جدول messages
+    # تخزين نتيجة التحليل كرسالة (role='assistant') في جدول messages
     analysis_msg = models.Message(
         user_id=user.id if user else None,
         project_id=project_id,
@@ -75,4 +75,4 @@ async def analyze_file(
         "file_id": file_id,
         "analysis_message_id": analysis_msg.id,
         "analysis": analysis_text,
-  }
+    }

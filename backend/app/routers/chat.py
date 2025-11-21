@@ -8,7 +8,10 @@ from openai import OpenAI
 from app import models, schemas
 from app.database import get_db
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+# ملاحظة مهمة:
+# لا نضع أي prefix هنا. المسار النهائي سيكون:
+# /api (من main) + /chat (من include_router في main) + /send (من هذا الملف)
+router = APIRouter(tags=["chat"])
 
 # يعتمد على OPENAI_API_KEY من متغيرات البيئة
 client = OpenAI()
@@ -22,7 +25,10 @@ def send_message(
     message_in: schemas.MessageCreate,
     db: Session = Depends(get_db),
 ):
-    # مؤقتاً نثبت user_id = 1 (ربطه بالحساب الحقيقي لاحقاً)
+    """
+    يحفظ رسالة المستخدم في جدول messages.
+    (حالياً نثبت user_id = 1 إلى أن نربطه بنظام الدخول فعلياً)
+    """
     user_id = 1
 
     db_message = models.Message(
@@ -46,9 +52,15 @@ def chat_reply(
     chat: schemas.ChatRequest,
     db: Session = Depends(get_db),
 ):
+    """
+    - يقرأ تاريخ الدردشة للجلسة / المشروع.
+    - يبحث عن أحدث تحليل ملف محفوظ لهذا المشروع (رسالة assistant تبدأ بـ "[تحليل الملف:").
+    - يحقن هذا التحليل في سياق OpenAI.
+    - يحفظ رد المساعد في جدول messages.
+    """
     user_id = 1
 
-    # تاريخ المحادثة لهذه الجلسة (وأيضاً لنفس المشروع لو محدد)
+    # تاريخ المحادثة (لنفس الجلسة، ونفس المشروع لو محدد)
     q = db.query(models.Message)
 
     if chat.session_id:
@@ -77,7 +89,7 @@ def chat_reply(
     )
     messages_payload.append({"role": "system", "content": system_msg})
 
-    # نضيف تاريخ المحادثة السابق (مستخدم + مساعد)
+    # نضيف تاريخ المحادثة (user / assistant)
     for msg in history:
         role = "assistant" if msg.role == "assistant" else "user"
         messages_payload.append({"role": role, "content": msg.content})
@@ -97,7 +109,6 @@ def chat_reply(
         )
 
     if last_analysis:
-        # نحقن نص التحليل كجزء من سياق المحادثة
         messages_payload.append(
             {
                 "role": "assistant",
@@ -108,7 +119,7 @@ def chat_reply(
             }
         )
 
-    # أخيراً: رسالة المستخدم الحالية
+    # رسالة المستخدم الحالية
     messages_payload.append({"role": "user", "content": chat.content})
 
     # استدعاء OpenAI
@@ -125,7 +136,7 @@ def chat_reply(
 
     assistant_reply = completion.choices[0].message.content
 
-    # تخزين رد المساعد في قاعدة البيانات
+    # حفظ رد المساعد في قاعدة البيانات
     db_message = models.Message(
         user_id=user_id,
         project_id=chat.project_id,
@@ -133,7 +144,7 @@ def chat_reply(
         role="assistant",
         content=assistant_reply,
     )
-    db.add(db_message)
+    db.add(db_message);
     db.commit()
     db.refresh(db_message)
     return db_message
@@ -149,8 +160,9 @@ def get_history(
     db: Session = Depends(get_db),
 ):
     """
-    يعيد سجل الدردشة للجلسة المحددة، بالإضافة إلى أي رسائل تحليل ملفات
+    يعيد سجل الدردشة للجلسة المحددة + أي رسائل تحليل ملفات
     تابعة لنفس المشروع (حتى لو session_id = NULL).
+    بدون session_id وبدون project_id لا نرجّع شيء.
     """
     q = db.query(models.Message)
     conditions = []
@@ -164,17 +176,16 @@ def get_history(
     if conditions:
         q = q.filter(or_(*conditions))
     else:
-        # بدون session_id ولا project_id لا نرجع شيء
         return []
 
     messages = q.order_by(models.Message.id.asc()).all()
 
     return [
-        schemas.MessageOut(
-            id=m.id,
-            role=m.role,
-            content=m.content,
-            created_at=m.created_at,
-        )
-        for m in messages
-              ]
+      schemas.MessageOut(
+          id=m.id,
+          role=m.role,
+          content=m.content,
+          created_at=m.created_at,
+      )
+      for m in messages
+    ]

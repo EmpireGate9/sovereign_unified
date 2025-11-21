@@ -7,12 +7,11 @@ const REGISTER_PATH = "/api/auth/register";
 const LOGIN_PATH    = "/api/auth/login";
 const PROJECTS_PATH = "/api/projects";
 const FILES_BASE    = "/api/files";
-const CHAT_BASE     = "/api/chat/api/chat";
+// تركنا CHAT_BASE لكن لن نستخدمه في الدردشة لتفادي أي لبس
+const CHAT_BASE     = "/api/chat";
 const VOICE_BASE    = "/api/voice";
 const VISION_BASE   = "/api/vision";
 const GOV_BASE      = "/api/governance";
-
-// لا نستخدم ثابت لمسار التحليل الآن، سنجرب أكثر من مسار داخل الدالة نفسها
 
 let token = localStorage.getItem("token") || "";
 
@@ -582,13 +581,12 @@ async function listFiles() {
 }
 
 // =======================
-// ملفات: تحليل ومعالجة (مع تجربة أكثر من مسار)
+// ملفات: تحليل ومعالجة
 // =======================
 async function analyzeFile() {
   const out = document.getElementById("file_resp");
 
   try {
-    // 1) قراءة رقم المشروع
     const pidRaw = document.getElementById("f_pid").value.trim();
     const pid    = parseInt(pidRaw, 10);
 
@@ -599,7 +597,6 @@ async function analyzeFile() {
       return;
     }
 
-    // 2) جلب قائمة الملفات للحصول على أول ملف
     const listUrl  = `${BACKEND_URL}${FILES_BASE}/list?project_id=${pid}`;
     const listRes  = await fetch(listUrl, {
       headers: { "Authorization": "Bearer " + (token || "") }
@@ -628,7 +625,6 @@ async function analyzeFile() {
 
     const file_id = listData[0].id;
 
-    // 3) إعداد بيانات الطلب
     const payload = JSON.stringify({
       project_id: pid,
       file_id: file_id
@@ -645,7 +641,6 @@ async function analyzeFile() {
       });
     }
 
-    // نجرب أولاً /api/analysis/analyze-file ثم /api/analyze-file إذا رجع 404
     let res = await callAnalysis(`${BACKEND_URL}/api/analysis/analyze-file`);
     if (res.status === 404) {
       res = await callAnalysis(`${BACKEND_URL}/api/analyze-file`);
@@ -659,7 +654,6 @@ async function analyzeFile() {
       return;
     }
 
-    // 4) استخراج نص التحليل من JSON إن وجد
     let msg = text;
     try {
       const obj = JSON.parse(text);
@@ -669,7 +663,7 @@ async function analyzeFile() {
         msg = obj.message;
       }
     } catch {
-      // إذا لم يكن JSON نعرض النص كما هو
+      // يبقى النص كما هو
     }
 
     if (out) out.textContent = msg;
@@ -682,12 +676,12 @@ async function analyzeFile() {
 }
 
 // =======================
-// دردشة
+// دردشة (مسارات صريحة)
 // =======================
 async function sendMsg() {
   try {
-    const pidRaw = document.getElementById("c_pid").value.trim();
-    const text   = document.getElementById("c_text").value.trim();
+    const pidRaw  = document.getElementById("c_pid").value.trim();
+    const text    = document.getElementById("c_text").value.trim();
     const inputEl = document.getElementById("c_text");
 
     if (!text) {
@@ -701,9 +695,11 @@ async function sendMsg() {
       return;
     }
 
-    const url = BACKEND_URL + CHAT_BASE + "/send";
+    const sendUrl  = `${BACKEND_URL}/api/chat/send`;
+    const replyUrl = `${BACKEND_URL}/api/chat/reply`;
 
-    const res = await fetch(url, {
+    // 1) تخزين رسالة المستخدم
+    const res = await fetch(sendUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -722,7 +718,7 @@ async function sendMsg() {
       return;
     }
 
-    const replyUrl = BACKEND_URL + CHAT_BASE + "/reply";
+    // 2) طلب رد المساعد
     const replyRes = await fetch(replyUrl, {
       method: "POST",
       headers: {
@@ -752,11 +748,11 @@ async function sendMsg() {
 
 async function loadHistory() {
   try {
-    const pidRaw = document.getElementById("c_pid").value.trim();
+    const pidRaw     = document.getElementById("c_pid").value.trim();
     const project_id = pidRaw ? parseInt(pidRaw, 10) : null;
-    const box  = document.getElementById("chat_box");
+    const box        = document.getElementById("chat_box");
 
-    let url = BACKEND_URL + CHAT_BASE + "/history";
+    let url = `${BACKEND_URL}/api/chat/history`;
     const params = new URLSearchParams();
     params.set("session_id", SESSION_ID);
     if (project_id && !Number.isNaN(project_id)) {

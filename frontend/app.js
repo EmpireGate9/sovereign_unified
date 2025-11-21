@@ -471,23 +471,25 @@ async function listFiles() {
   }
 }
 
-/* ===========================
+/* ============================
    تحليل ملف
-=========================== */
-
+============================ */
 async function analyzeFile() {
   const out = document.getElementById("file_resp");
+
   try {
+    // 1) قراءة رقم المشروع
     const pidRaw = document.getElementById("f_pid").value.trim();
     const pid    = parseInt(pidRaw, 10);
 
     if (Number.isNaN(pid)) {
-      showError("فضلاً أدخل رقم مشروع صحيح.");
-      if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
+      const msg = "فضلاً أدخل رقم مشروع صحيح.";
+      if (out) out.textContent = msg;
+      showError(msg);
       return;
     }
 
-    // جلب قائمة الملفات للحصول على أول ملف
+    // 2) جلب قائمة الملفات للحصول على أول ملف
     const listUrl  = `${BACKEND_URL + FILES_BASE}/list?project_id=${pid}`;
     const listRes  = await fetch(listUrl, {
       headers: { "Authorization": "Bearer " + (token || "") }
@@ -495,7 +497,7 @@ async function analyzeFile() {
     const listText = await listRes.text();
 
     if (!listRes.ok) {
-      if (out) out.textContent = listText || "فشل جلب الملفات.";
+      if (out) out.textContent = listText || "فشل جلب الملفات قبل التحليل.";
       showError("فشل جلب الملفات قبل التحليل.");
       return;
     }
@@ -508,15 +510,18 @@ async function analyzeFile() {
     }
 
     if (!Array.isArray(listData) || !listData.length) {
-      showError("لا يوجد ملفات لتحليلها في هذا المشروع.");
-      if (out) out.textContent = "لا يوجد ملفات لتحليلها في هذا المشروع.";
+      const msg = "لا توجد ملفات لتحليلها في هذا المشروع.";
+      if (out) out.textContent = msg;
+      showError(msg);
       return;
     }
 
     const file_id = listData[0].id;
 
-    const analyzeUrl = BACKEND_URL + ANALYSIS_BASE + "/run";
-    const res = await fetch(analyzeUrl, {
+    // 3) استدعاء نقطة التحليل
+    const analyzeUrl = BACKEND_URL + ANALYSIS_PATH;   // مثال: "/api/analysis/file"
+
+    const res  = await fetch(analyzeUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -524,18 +529,19 @@ async function analyzeFile() {
       },
       body: JSON.stringify({
         project_id: pid,
-        file_id: file_id
+        file_id: file_id,
+        session_id: SESSION_ID   // ربط التحليل بنفس جلسة الدردشة
       })
     });
-
     const text = await res.text();
 
     if (!res.ok) {
-      if (out) out.textContent = text || "فشل تحليل الملف.";
+      if (out) out.textContent = text;
       showError("فشل تحليل الملف");
       return;
     }
 
+    // 4) استخراج رسالة مختصرة للمستخدم
     let msg = text;
     try {
       const obj = JSON.parse(text);
@@ -543,15 +549,18 @@ async function analyzeFile() {
         msg = obj.message;
       }
     } catch {
-      // نستخدم النص كما هو
+      // نستخدم النص كما هو إذا لم يكن JSON
     }
 
-    if (out) out.textContent = "نتيجة التحليل:\n\n" + msg;
-    showInfo("تم تحليل الملف بنجاح، ويمكنك رؤية النتيجة في الدردشة أيضاً.");
-
+    if (out) {
+      out.textContent =
+        msg || "تم تحليل الملف بنجاح. يمكنك الآن مراجعة النتيجة في الدردشة.";
+    }
+    showInfo("تم تحليل ومعالجة الملف. يمكنك مشاهدة النتيجة في الدردشة.");
   } catch (err) {
     console.error(err);
-    if (out) out.textContent = "فشل تحليل الملف.";
+    if (out) out.textContent = "خطأ في طلب التحليل.";
+    showError("حدث خطأ أثناء طلب التحليل.");
   }
 }
 

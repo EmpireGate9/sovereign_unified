@@ -468,7 +468,7 @@ async function listFiles() {
     const pid = parseInt(pidRaw, 10);
     if (Number.isNaN(pid)) {
       if (out) out.textContent = "فضلاً أدخل رقم مشروع صحيح.";
-      showError("فضلاً أدخل رقم مشروع صحيح.";
+      showError("فضلاً أدخل رقم مشروع صحيح.");
       return;
     }
 
@@ -487,7 +487,7 @@ async function listFiles() {
           window._lastFiles = data;
         }
       } catch {
-        // نتركها كما هي إذا لم تكن JSON.
+        // إذا لم يكن JSON صحيح نتركه كما هو
       }
       if (out) out.textContent = text || "لا توجد ملفات لهذا المشروع حتى الآن.";
     } else if (res.status === 404 || res.status === 422) {
@@ -543,7 +543,7 @@ async function analyzeFile() {
       const data = await listRes.json().catch(() => []);
       if (!Array.isArray(data) || data.length === 0) {
         if (out) out.textContent = "لا توجد ملفات لتحليلها لهذا المشروع.";
-        showError("لا توجد ملفات لتحليلها لهذا المشروع.";
+        showError("لا توجد ملفات لتحليلها لهذا المشروع.");
         return;
       }
 
